@@ -19,10 +19,13 @@
 #include "IsRPI.h"
 #include <lccv.hpp>
 #include "ServoPi.h"
-#include "ObjectDetector.h"
+// #include "ObjectDetector.h"
 #include "lgpio.h"
-#include "CvImageMatch.h"
+// #include "CvImageMatch.h"
 #include "ssd1306.h"
+#include "Detector/Detector.hpp"
+#include "Detector/OpenCvStrategy.hpp"
+#include "Detector/TfliteStrategy.hpp"
 
 //#define USE_TFLITE      1 
 #define USE_IMAGE_MATCH 1
@@ -84,6 +87,7 @@ static bool                   HaveOLED=false;
 static int                    OLED_Font=0;
 static pthread_t              NetworkThreadID=-1;
 static pthread_t              EngagementThreadID=-1;
+static pthread_t              DetectThreadID=-1;
 static volatile SystemState_t SystemState= SAFE;
 static pthread_mutex_t        TCP_Mutex;
 static pthread_mutex_t        GPIO_Mutex;
@@ -117,12 +121,15 @@ static void   Control_C_Handler(int s);
 static void   HandleInputChar(Mat &image);
 static void * NetworkInputThread(void *data);
 static void * EngagementThread(void *data); 
+static void * DetectThread(void *data);
 static int    PrintfSend(const char *fmt, ...); 
 static bool   GetFrame( Mat &frame);
 static void   CreateNoDataAvalable(void);
 static int    SendSystemState(SystemState_t State);
 static bool   compare_float(float x, float y, float epsilon = 0.5f);
 static void   ServoAngle(int Num,float &Angle) ;
+
+static Detector *detector;
 
 
 /*************************************** TF LITE START ********************************************************/ 
@@ -306,16 +313,17 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                 {
                   int retval;
                   TEngagementState state=LOOKING_FOR_TARGET;
-                  for (int i = 0; i < NumMatches; i++)
+                  for (int i = 0; i < detector->getNumMatches(); i++)
                      {
-                      if (DetectedMatches[i].match==Auto->Target)
+                      TDetected item = detector->getDetectedItem(i);
+                      if (item.match==Auto->Target)
                         {
                          float PanError,TiltError;
-                         PanError=(DetectedMatches[i].center.x+xCorrect)-width/2;
+                         PanError=(item.center.x+xCorrect)-width/2;
                          Pan=Pan-PanError/75;
                          ServoAngle(PAN_SERVO, Pan);
 
-                         TiltError=(DetectedMatches[i].center.y+yCorrect)-height/2;
+                         TiltError=(item.center.y+yCorrect)-height/2;
                          Tilt=Tilt-TiltError/75;
                          ServoAngle(TILT_SERVO, Tilt);
  
@@ -689,16 +697,19 @@ int main(int argc, const char** argv)
  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 #elif USE_IMAGE_MATCH
 
- printf("Image Match Mode\n");
+// ZOO
+  // detector = new OpenCvDetector();
+  detector = new Detector(new OpenCvStrategy());
+//  printf("Image Match Mode\n");
 
- DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
+//  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
 
 
- if (LoadRefImages(symbols) == -1) 
-   {
-    printf("Error reading reference symbols\n");
-    return -1;
-   }
+//  if (LoadRefImages(symbols) == -1) 
+//    {
+//     printf("Error reading reference symbols\n");
+//     return -1;
+//    }
 
 #endif
 
@@ -749,6 +760,11 @@ int main(int argc, const char** argv)
      printf("Failed to Create ,Engagement Thread\n");
      exit(0);
    }
+   if (pthread_create(&DetectThreadID, NULL,DetectThread, NULL)!=0)
+   {
+     printf("Failed to Create Detect Input Thread\n");
+     exit(0);
+   }
 
   do
    {
@@ -788,9 +804,13 @@ int main(int argc, const char** argv)
 #elif USE_IMAGE_MATCH
          TEngagementState tmpstate=AutoEngage.State;
 
-         if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
-         ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-         if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
+        // ZOO
+        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
+        //  ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
+        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
+        
+        ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
+        if (tmpstate!=ENGAGEMENT_IN_PROGRESS) detector->draw(Frame);
 #endif
 #define FPS_XPOS 0
 #define FPS_YPOS 20
@@ -873,6 +893,29 @@ static void * EngagementThread(void *data)
 }
 //------------------------------------------------------------------------------------------------
 // END static void * EngagementThread
+//------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
+// static void * DetectThread
+//------------------------------------------------------------------------------------------------
+static void * DetectThread(void *data) 
+{
+  Mat Frame;
+  while (1) {
+    TEngagementState tmpstate=AutoEngage.State;
+    if (tmpstate!=ENGAGEMENT_IN_PROGRESS) {
+      if (!GetFrame(Frame))
+      {
+        printf("ERROR! blank frame grabbed\n");
+        continue;
+      }
+      detector->detect(Frame);
+    }
+  }
+
+  return NULL;
+}
+//------------------------------------------------------------------------------------------------
+// END static void * DetectThread
 //------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
 // static int PrintfSend
@@ -1354,6 +1397,21 @@ RestoreKeyboard();                // restore Keyboard
        printf("Engagement Thread canceled\n"); 
    else
        printf("Engagement Thread was not canceled\n"); 
+ }
+ if (DetectThreadID!=-1)
+  {
+   //printf("Cancel Detect Thread\n");
+   s = pthread_cancel(DetectThreadID);
+   if (s!=0)  printf("Detect Thread Cancel Failure\n");
+ 
+   //printf("Detect Thread Join\n"); 
+   s = pthread_join(DetectThreadID, &res);
+   if (s != 0)   printf("Detect Thread Join Failure\n"); 
+
+   if (res == PTHREAD_CANCELED)
+       printf("Detect Thread canceled\n"); 
+   else
+       printf("Detect Thread was not canceled\n"); 
  }
 
  CloseCamera();
