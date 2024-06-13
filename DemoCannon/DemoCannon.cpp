@@ -313,33 +313,30 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                 {
                   int retval;
                   TEngagementState state=LOOKING_FOR_TARGET;
-                  for (int i = 0; i < detector->getNumMatches(); i++)
-                     {
-                      TDetected item = detector->getDetectedItem(i);
-                      if (item.match==Auto->Target)
-                        {
-                         float PanError,TiltError;
-                         PanError=(item.center.x+xCorrect)-width/2;
-                         Pan=Pan-PanError/75;
-                         ServoAngle(PAN_SERVO, Pan);
+                  TDetected item = detector->getDetectedItem(Auto->Target);
 
-                         TiltError=(item.center.y+yCorrect)-height/2;
-                         Tilt=Tilt-TiltError/75;
-                         ServoAngle(TILT_SERVO, Tilt);
- 
-                         if ((compare_float(Auto->LastPan,Pan)) && (compare_float(Auto->LastTilt,Tilt)))
-                          {
-                            Auto->StableCount++;
-                          }
-                         else Auto->StableCount=0;
+                  if (item.match != -1) {
+                    float PanError,TiltError;
+                    PanError=(item.center.x+xCorrect)-width/2;
+                    Pan=Pan-PanError/75;
+                    ServoAngle(PAN_SERVO, Pan);
 
-                         Auto->LastPan=Pan;
-                         Auto->LastTilt=Tilt;
-                         if (Auto->StableCount>2) state=TRACKING_STABLE;
-                         else state=TRACKING;
-                         break;
-                        }
-                     }
+                    TiltError=(item.center.y+yCorrect)-height/2;
+                    Tilt=Tilt-TiltError/75;
+                    ServoAngle(TILT_SERVO, Tilt);
+
+                    if ((compare_float(Auto->LastPan,Pan)) && (compare_float(Auto->LastTilt,Tilt)))
+                    {
+                      Auto->StableCount++;
+                    }
+                    else Auto->StableCount=0;
+
+                    Auto->LastPan=Pan;
+                    Auto->LastTilt=Tilt;
+                    if (Auto->StableCount>2) state=TRACKING_STABLE;
+                    else state=TRACKING;
+                  }
+
                   if (Auto->State!=state)  
                      {
                       NewState=true;
@@ -699,7 +696,7 @@ int main(int argc, const char** argv)
 
 // ZOO
   // detector = new OpenCvDetector();
-  detector = new Detector(new OpenCvStrategy());
+  detector = new Detector(new TfliteStrategy());
 //  printf("Image Match Mode\n");
 
 //  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];

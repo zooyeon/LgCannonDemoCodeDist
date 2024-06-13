@@ -10,8 +10,7 @@ public:
 
     void detect(const cv::Mat& Frame);
     void draw(const cv::Mat& Frame);
-    int getNumMatches();
-    TDetected getDetectedItem(int index);
+    TDetected getDetectedItem(int target);
     void setStrategy(DetectStrategy *strategy);
 
 private:

@@ -17,7 +17,7 @@ Detector::Detector(DetectStrategy *strategy){
 };
 
 Detector::~Detector() {
-    delete this=>strategy;
+    delete this->strategy;
 };
 
 void Detector::detect(const cv::Mat& Frame) {
@@ -49,12 +49,19 @@ void Detector::draw(const cv::Mat& Frame) {
     pthread_mutex_unlock(&Mutex);
 };
 
-int Detector::getNumMatches() {
-    return numDetected;
-}
+TDetected Detector::getDetectedItem(int target) {
+    TDetected ret;
+    ret.match = -1;
 
-TDetected Detector::getDetectedItem(int index) {
-    return detected[index];
+    pthread_mutex_lock(&Mutex);
+    for (int i = 0; i < numDetected; ++i) {
+        if (detected[i].match == target) {
+            ret = detected[i];
+            break;
+        }
+    }
+    pthread_mutex_unlock(&Mutex);
+    return ret;
 }
 
 void Detector::setStrategy(DetectStrategy *strategy) {

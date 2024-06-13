@@ -2,7 +2,7 @@
 
 TfliteStrategy::TfliteStrategy(){
     printf("TensorFlow Lite Mode\n");
-    tf = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
+    tf = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false, true);
 };
 
 TfliteStrategy::~TfliteStrategy() {
@@ -20,6 +20,11 @@ void TfliteStrategy::sync(TDetected (&detected)[], int &numDetected) {
     {
         if (res[i].score<0.10) continue;
 
+        float x = res[i].xmin + res[i].xmax;
+        float y = res[i].ymin + res[i].ymax;
+        Point2f center(y / 2, x / 2);
+
+        detected[numDetected].center = center;
         detected[numDetected].match = res[i].label;
         detected[numDetected].xmin = res[i].xmin;
         detected[numDetected].xmax = res[i].xmax;

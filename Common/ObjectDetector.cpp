@@ -22,7 +22,7 @@ void ObjectDetector::initDetectionModel(const char* tfliteModelPath, bool useXnn
 
 	// Build the interpreter
 	TfLiteInterpreterOptions* options = TfLiteInterpreterOptionsCreate();
-	TfLiteInterpreterOptionsSetNumThreads(options, 1);
+	TfLiteInterpreterOptionsSetNumThreads(options, 4);
 
 	if (useXnn) {
 		TfLiteXNNPackDelegateOptions xnnOpts = TfLiteXNNPackDelegateOptionsDefault();
