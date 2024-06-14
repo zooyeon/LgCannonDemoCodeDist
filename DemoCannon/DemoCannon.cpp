@@ -694,19 +694,7 @@ int main(int argc, const char** argv)
  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 #elif USE_IMAGE_MATCH
 
-// ZOO
-  // detector = new OpenCvDetector();
-  detector = new Detector(new TfliteStrategy());
-//  printf("Image Match Mode\n");
-
-//  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
-
-
-//  if (LoadRefImages(symbols) == -1) 
-//    {
-//     printf("Error reading reference symbols\n");
-//     return -1;
-//    }
+  detector = new Detector(new OpenCvStrategy());
 
 #endif
 
@@ -800,13 +788,6 @@ int main(int argc, const char** argv)
    delete[] res;
 #elif USE_IMAGE_MATCH
          TEngagementState tmpstate=AutoEngage.State;
-
-        // ZOO
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
-        //  ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
-        
-        ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
         if (tmpstate!=ENGAGEMENT_IN_PROGRESS) detector->draw(Frame);
 #endif
 #define FPS_XPOS 0
@@ -906,6 +887,7 @@ static void * DetectThread(void *data)
         continue;
       }
       detector->detect(Frame);
+      ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     }
   }
 
