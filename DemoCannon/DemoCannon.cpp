@@ -131,6 +131,75 @@ static void   ServoAngle(int Num,float &Angle) ;
 
 static Detector *detector;
 
+/*******************New functions*****************/
+
+static voi enterSafe(SystemState_t state) {
+    laser(false);
+    calibrate(false);
+    fire(false);
+    SystemState = (SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
+    AutoEngage.State = NOT_ACTIVE;
+    AutoEngage.HaveFiringOrder = false;
+    AutoEngage.NumberOfTartgets = 0;
+}
+
+static void enterPrearm(SystemState_t state, bool reset_needed = true) {
+
+    if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO) ||
+        ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL))
+    {
+        laser(false);
+        fire(false);
+        calibrate(false);
+        if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO)
+        {
+            AutoEngage.State = NOT_ACTIVE;
+            if (reset_needed == true)
+            {
+                AutoEngage.HaveFiringOrder = false;
+                AutoEngage.NumberOfTartgets = 0;
+            }
+        }
+        SystemState = (SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
+    }
+}
+
+static void enterAutoEngage(SystemState_t state) {
+
+    if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED)
+    {
+        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+    }
+    else if (!AutoEngage.HaveFiringOrder)
+    {
+        PrintfSend("No Firing Order List");
+    }
+    else
+    {
+        laser(false);
+        calibrate(false);
+        fire(false);
+        SystemState = (SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
+        AutoEngage.State = ACTIVATE;
+    }
+}
+
+static void enterArmedManual(SystemState_t state) {
+
+    if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
+        ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
+    {
+        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+    }
+    else if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED)
+    {
+        laser(false);
+        calibrate(false);
+        fire(false);
+        SystemState = (SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
+    }
+    else SystemState = state;
+}
 
 /*************************************** TF LITE START ********************************************************/ 
 #if USE_TFLITE && !USE_IMAGE_MATCH
@@ -868,10 +937,11 @@ static void * EngagementThread(void *data)
     printf("Engagment in Progress\n");
     laser(true);
     SendSystemState(SystemState);
-    usleep(1500*1000);
+    //usleep(1500*1000);  
+    usleep(500*1000);  //todo: reduce the sleep time for testing
     fire(true);
     SendSystemState(SystemState);
-    usleep(200*1000);
+    usleep(200*1000);      
     fire(false);
     laser(false);
     armed(false);
@@ -1002,73 +1072,18 @@ static void ProcessStateChangeRequest(SystemState_t state)
  switch(state&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)
  {
   case SAFE:
-            {
-              laser(false);
-              calibrate(false);
-              fire(false);
-              SystemState=(SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
-              AutoEngage.State=NOT_ACTIVE;
-              AutoEngage.HaveFiringOrder=false;
-              AutoEngage.NumberOfTartgets=0;
-            }
-            break;
+	  enterSafe(state);
+	  break;
   case PREARMED:
-            { 
-              if (((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)==ENGAGE_AUTO) || 
-                  ((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)==ARMED_MANUAL))
-                {
-                  laser(false);
-                  fire(false);
-                  calibrate(false);
-                  if ((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)==ENGAGE_AUTO)
-                     {
-                      AutoEngage.State=NOT_ACTIVE;
-                      AutoEngage.HaveFiringOrder=false;
-                      AutoEngage.NumberOfTartgets=0;
-                     }
-                  SystemState=(SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
-                }
-             }
-             break;
+      enterPrearm(state);
+	  break;
 
   case ENGAGE_AUTO:
-            {
-              if ((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=PREARMED)
-              {
-               PrintfSend("Invalid State request to Auto %d\n",SystemState); 
-              }
-             else if (!AutoEngage.HaveFiringOrder)
-              {
-               PrintfSend("No Firing Order List");
-              }
-             else 
-              {
-                laser(false);
-                calibrate(false);
-                fire(false);
-                SystemState=(SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
-                AutoEngage.State=ACTIVATE;
-              }
-            }
-            break;
+      enterAutoEngage(state);
+	  break;
   case ARMED_MANUAL:
-            {
-              if (((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=PREARMED) && 
-                  ((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL)) 
-              {
-               PrintfSend("Invalid State request to Auto %d\n",SystemState); 
-              }
-             else if ((SystemState&CLEAR_LASER_FIRING_ARMED_CALIB_MASK)==PREARMED)
-              {
-                laser(false);
-                calibrate(false);
-                fire(false);
-                SystemState=(SystemState_t)(state & CLEAR_LASER_FIRING_ARMED_CALIB_MASK);
-              }
-             else SystemState=state;
-
-            }
-            break;
+      enterArmedManual(state);
+	  break;
   default:
              {
               printf("UNKNOWN STATE REQUEST %d\n",state);
@@ -1121,17 +1136,17 @@ static void ProcessFiringOrder(char * FiringOrder)
     {
       AutoEngage.FiringOrder[i]=FiringOrder[i]-'0';
     }
-  if (len>0)  AutoEngage.HaveFiringOrder=true;
+  if (len > 0)  AutoEngage.HaveFiringOrder = true;
   else
-    {
-     AutoEngage.HaveFiringOrder=false;
-     PrintfSend("Empty Firing List");
-     return;
-    }
-  AutoEngage.NumberOfTartgets=len; 
+  {
+      AutoEngage.HaveFiringOrder = false;
+      PrintfSend("Empty Firing List");
+      return;
+  }
+  AutoEngage.NumberOfTartgets = len;
 #if 0  
   printf("Firing order:\n");
-  for (int i=0;i<len;i++) printf("%d\n",AutoEngage.FiringOrder[i]);
+  for (int i = 0; i < len; i++) printf("%d\n", AutoEngage.FiringOrder[i]);
   printf("\n\n");
 #endif
 }
@@ -1143,67 +1158,103 @@ static void ProcessFiringOrder(char * FiringOrder)
 //------------------------------------------------------------------------------------------------
 static void ProcessCommands(unsigned char cmd)
 {
- if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=PREARMED) &&
-     ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL))
+    if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
+        ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
     {
-      printf("received Commands outside of Pre-Arm or Armed Manual State %x \n",cmd);
-      return;
-    } 
- if (((cmd==FIRE_START) || (cmd==FIRE_STOP)) && ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL))
+        printf("received Commands outside of Pre-Arm or Armed Manual State %x \n", cmd);
+        return;
+    }
+    if (((cmd == FIRE_START) || (cmd == FIRE_STOP)) && ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
     {
-      printf("received Fire Commands outside of Armed Manual State %x \n",cmd);
-      return;
-    } 
+        printf("received Fire Commands outside of Armed Manual State %x \n", cmd);
+        return;
+    }
 
 
-      switch(cmd)
-        {
-         case PAN_LEFT_START:
-              RunCmds|=PAN_LEFT_START;
-              RunCmds&=PAN_RIGHT_STOP;
-              Pan+=INC;
-              ServoAngle(PAN_SERVO, Pan);
-              break;
-         case PAN_RIGHT_START:
-              RunCmds|=PAN_RIGHT_START;
-              RunCmds&=PAN_LEFT_STOP;
-              Pan-=INC;
-              ServoAngle(PAN_SERVO, Pan);
-              break;
-         case PAN_UP_START:
-              RunCmds|=PAN_UP_START;
-              RunCmds&=PAN_DOWN_STOP;
-              Tilt+=INC; 
-              ServoAngle(TILT_SERVO, Tilt);
-              break;
-         case PAN_DOWN_START:
-              RunCmds|=PAN_DOWN_START;
-              RunCmds&=PAN_UP_STOP;
-              Tilt-=INC; 
-              ServoAngle(TILT_SERVO, Tilt);
-              break;
-         case FIRE_START:
-              RunCmds|=FIRE_START;
-              fire(true);
-              SendSystemState(SystemState);
-              break;   
-         case PAN_LEFT_STOP:
-              RunCmds&=PAN_LEFT_STOP;
-              break;
-         case PAN_RIGHT_STOP:
-              RunCmds&=PAN_RIGHT_STOP;
-              break;
-         case PAN_UP_STOP:
-              RunCmds&=PAN_UP_STOP;
-              break;
-         case PAN_DOWN_STOP:
-              RunCmds&=PAN_DOWN_STOP;
-              break;
-         case FIRE_STOP: 
-              RunCmds&=FIRE_STOP;
-              fire(false);
-              SendSystemState(SystemState);
-              break;
+    switch (cmd)
+    {
+    case PAN_LEFT_START:
+        RunCmds |= PAN_LEFT_START;
+        RunCmds &= PAN_RIGHT_STOP;
+        Pan += INC;
+        ServoAngle(PAN_SERVO, Pan);
+        break;
+    case PAN_RIGHT_START:
+        RunCmds |= PAN_RIGHT_START;
+        RunCmds &= PAN_LEFT_STOP;
+        Pan -= INC;
+        ServoAngle(PAN_SERVO, Pan);
+        break;
+    case PAN_UP_START:
+        RunCmds |= PAN_UP_START;
+        RunCmds &= PAN_DOWN_STOP;
+        Tilt += INC;
+        ServoAngle(TILT_SERVO, Tilt);
+        break;
+    case PAN_DOWN_START:
+        RunCmds |= PAN_DOWN_START;
+        RunCmds &= PAN_UP_STOP;
+        Tilt -= INC;
+        ServoAngle(TILT_SERVO, Tilt);
+        break;
+    case FIRE_START:
+        RunCmds |= FIRE_START;
+        fire(true);
+        SendSystemState(SystemState);
+        break;
+    case PAN_LEFT_STOP:
+        RunCmds &= PAN_LEFT_STOP;
+        break;
+    case PAN_RIGHT_STOP:
+        RunCmds &= PAN_RIGHT_STOP;
+        break;
+    case PAN_UP_STOP:
+        RunCmds &= PAN_UP_STOP;
+        break;
+    case PAN_DOWN_STOP:
+        RunCmds &= PAN_DOWN_STOP;
+        break;
+    case FIRE_STOP:
+        RunCmds &= FIRE_STOP;
+        fire(false);
+        SendSystemState(SystemState);
+        break;
+    case STOP:
+        enterSafe(SAFE);
+        SendSystemState(SystemState);
+        break;
+    case PAUSE:
+        enterPrearm(PREARMED, false);
+        SendSystemState(SystemState);
+        break;
+    case RESUME:
+        //todo
+        enterPrearm(ENGAGE_AUTO);
+        SendSystemState(SystemState);
+        break;
+    case CAMERA_ON:
+        //todo: reply the result to RUI
+        if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) ||
+            (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+            {
+                if (!OpenCamera())
+                {
+                    printf("Could not Open Camera\n");
+                }
+                else printf("Opened Camera\n");
+            }
+			break;
+         case CAMERA_OFF:
+             //todo: reply the result to RUI
+             if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) ||
+                 (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+				 {
+                     CloseCamera();
+             }
+             break;
+
+
+
          default:
               printf("invalid command %x\n",cmd);
               break;
@@ -1268,6 +1319,7 @@ static void *NetworkInputThread(void *data)
      {
       if (retval==0) printf("Client Disconnnected\n");
       else printf("Connecton Lost %s\n", strerror(errno));
+      enterSafe();
       break;
      }
    MsgHdr=(TMesssageHeader *)Buffer;
