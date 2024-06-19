@@ -281,11 +281,17 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM l
             else if ((wParam == 'i') || (wParam == 'I')) SendCode = PAN_UP_START;
             else if ((wParam == 'm') || (wParam == 'M')) SendCode = PAN_DOWN_START;
             else if ((wParam == 'f') || (wParam == 'F')) SendCode = FIRE_START;
-            //MessageBeep(MB_ICONEXCLAMATION);
+//new command
+            else if((wParam == 's') || (wParam == 'S')) SendCode = CMD_STOP;
+            else if ((wParam == 'r') || (wParam == 'R')) SendCode = CMD_RESUME;
+            else if ((wParam == 'p') || (wParam == 'P')) SendCode = CMD_PAUSE;
+            else if ((wParam == 'c') || (wParam == 'C')) SendCode = CMD_CAMERA_ON;
+            else if ((wParam == 'v') || (wParam == 'V')) SendCode = CMD_CAMERA_OFF;
             if (SendCode != 0)
             {
                 SendCodeToSever(SendCode);
             }
+
         }
         }
         break;
