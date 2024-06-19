@@ -101,6 +101,7 @@ static pthread_mutexattr_t    Engmnt_MutexAttr;
 static pthread_cond_t         Engagement_cv;
 static float                  xCorrect=60.0,yCorrect=-90.0;
 static volatile bool          isConnected=false;
+static volatile bool          isRunning = false;
 static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
 
@@ -830,8 +831,8 @@ int main(int argc, const char** argv)
         printf("OpenTcpListenPortFailed\n");
         return(-1);
     }
-
-	while (1) {
+    isRunning = true;
+	while (isRunning) {
 		if (isConnected)
 		{
 			// do not accept the nother connection
@@ -979,6 +980,7 @@ static int PrintfSend(const char *fmt, ...)
 //------------------------------------------------------------------------------------------------
 static int SendSystemState(SystemState_t State)
 {
+    printf("start Send Sytem state %d\n", State);
  TMesssageSystemState StateMsg;
  int                  retval;
  pthread_mutex_lock(&TCP_Mutex);
@@ -1005,7 +1007,7 @@ static int SendSystemState(SystemState_t State)
 //------------------------------------------------------------------------------------------------
 static void ProcessPreArm(char * Code)
 {
-    printf("start ProcessPreArm(%s)", Code);
+    printf("start ProcessPreArm(%s)\n", Code);
  char Decode[]={0x61,0x60,0x76,0x75,0x67,0x7b,0x72,0x7c};
 
  if (SystemState==SAFE)
@@ -1660,6 +1662,7 @@ static void Control_C_Handler(int s)
 {
  printf("Caught signal %d\n",s);
  CleanUp();
+ isRunning = false;
  printf("Exiting\n");
  exit(1);
 }
