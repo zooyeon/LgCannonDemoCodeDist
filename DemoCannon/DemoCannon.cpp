@@ -88,6 +88,7 @@ static int                    OLED_Font=0;
 static pthread_t              NetworkThreadID=-1;
 static pthread_t              EngagementThreadID=-1;
 static pthread_t              DetectThreadID=-1;
+static pthread_t              ClientThreadID = -1;
 static volatile SystemState_t SystemState= SAFE;
 static pthread_mutex_t        TCP_Mutex;
 static pthread_mutex_t        GPIO_Mutex;
@@ -117,11 +118,13 @@ static TTcpConnectedPort *TcpConnectedPort=NULL;
 
 static void   Setup_Control_C_Signal_Handler_And_Keyboard_No_Enter(void);
 static void   CleanUp(void);
+static void   CleanClientThread(void);
 static void   Control_C_Handler(int s);
 static void   HandleInputChar(Mat &image);
 static void * NetworkInputThread(void *data);
 static void * EngagementThread(void *data); 
 static void * DetectThread(void *data);
+static void * ClientHandlingThread(void* data);
 static int    PrintfSend(const char *fmt, ...); 
 static bool   GetFrame( Mat &frame);
 static void   CreateNoDataAvalable(void);
@@ -130,10 +133,17 @@ static bool   compare_float(float x, float y, float epsilon = 0.5f);
 static void   ServoAngle(int Num,float &Angle) ;
 
 static Detector *detector;
+static void laser(bool value);
+static void calibrate(bool value);
+static void fire(bool value);
+static void enterSafe(SystemState_t state);
+static void enterPrearm(SystemState_t state, bool reset_needed = true);
+static void enterAutoEngage(SystemState_t state);
+static void enterArmedManual(SystemState_t state);
 
 /*******************New functions*****************/
 
-static voi enterSafe(SystemState_t state) {
+static void enterSafe(SystemState_t state) {
     laser(false);
     calibrate(false);
     fire(false);
@@ -143,7 +153,7 @@ static voi enterSafe(SystemState_t state) {
     AutoEngage.NumberOfTartgets = 0;
 }
 
-static void enterPrearm(SystemState_t state, bool reset_needed = true) {
+static void enterPrearm(SystemState_t state, bool reset_needed) {
 
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO) ||
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL))
@@ -720,196 +730,115 @@ static void DrawCrosshair(Mat &img, Point correct, const Scalar &color)
 //------------------------------------------------------------------------------------------------
 int main(int argc, const char** argv)
 {
-  Mat                              Frame,ResizedFrame;      // camera image in Mat format 
-  float                            avfps=0.0,FPS[16]={0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0};
-  int                              retval,i,Fcnt = 0;
-  struct sockaddr_in               cli_addr;
-  socklen_t                        clilen;
-  chrono::steady_clock::time_point Tbegin, Tend;
- 
-  ReadOffsets();
 
-  for (i = 0; i < 16; i++) FPS[i] = 0.0;
-    
-  AutoEngage.State=NOT_ACTIVE;
-  AutoEngage.HaveFiringOrder=false;
-  AutoEngage.NumberOfTartgets=0;
+    Mat                              Frame, ResizedFrame;      // camera image in Mat format 
+    float                            avfps = 0.0, FPS[16] = { 0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0 };
+    int                              retval, i, Fcnt = 0;
+    struct sockaddr_in               cli_addr;
+    socklen_t                        clilen;
+    chrono::steady_clock::time_point Tbegin, Tend;
+   //-----------------------------init start---------------------------------
 
-  pthread_mutexattr_init(&TCP_MutexAttr);
-  pthread_mutexattr_settype(&TCP_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutexattr_init(&GPIO_MutexAttr);
-  pthread_mutexattr_settype(&GPIO_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutexattr_init(&I2C_MutexAttr);
-  pthread_mutexattr_settype(&I2C_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutexattr_init(&Engmnt_MutexAttr);
-  pthread_mutexattr_settype(&Engmnt_MutexAttr, PTHREAD_MUTEX_ERRORCHECK);
+    ReadOffsets();
 
-  if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr)!=0) return -1;
-  if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr)!=0) return -1; 
-  if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr)!=0) return -1; 
-  if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr)!=0) return -1; 
+    for (i = 0; i < 16; i++) FPS[i] = 0.0;
 
-  HaveOLED=OLEDInit();   
+    AutoEngage.State = NOT_ACTIVE;
+    AutoEngage.HaveFiringOrder = false;
+    AutoEngage.NumberOfTartgets = 0;
 
-  printf("OpenCV: Version %s\n",cv::getVersionString().c_str());
+    pthread_mutexattr_init(&TCP_MutexAttr);
+    pthread_mutexattr_settype(&TCP_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_init(&GPIO_MutexAttr);
+    pthread_mutexattr_settype(&GPIO_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_init(&I2C_MutexAttr);
+    pthread_mutexattr_settype(&I2C_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutexattr_init(&Engmnt_MutexAttr);
+    pthread_mutexattr_settype(&Engmnt_MutexAttr, PTHREAD_MUTEX_ERRORCHECK);
 
-  //printf("OpenCV: %s", cv::getBuildInformation().c_str());
+    if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr) != 0) return -1;
+    if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr) != 0) return -1;
+    if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr) != 0) return -1;
+    if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr) != 0) return -1;
+
+    HaveOLED = OLEDInit();
+
+    printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
+
+    //printf("OpenCV: %s", cv::getBuildInformation().c_str());
 
 #if USE_TFLITE
- printf("TensorFlow Lite Mode\n");
- detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
+    printf("TensorFlow Lite Mode\n");
+    detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 #elif USE_IMAGE_MATCH
 
 // ZOO
   // detector = new OpenCvDetector();
-  detector = new Detector(new TfliteStrategy());
-//  printf("Image Match Mode\n");
+    detector = new Detector(new TfliteStrategy());
+    //  printf("Image Match Mode\n");
 
-//  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
+    //  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
 
 
-//  if (LoadRefImages(symbols) == -1) 
-//    {
-//     printf("Error reading reference symbols\n");
-//     return -1;
-//    }
+    //  if (LoadRefImages(symbols) == -1) 
+    //    {
+    //     printf("Error reading reference symbols\n");
+    //     return -1;
+    //    }
 
 #endif
-
- if  ((TcpListenPort=OpenTcpListenPort(PORT))==NULL)  // Open UDP Network port
-     {
-       printf("OpenTcpListenPortFailed\n");
-       return(-1);
-     }
-
-   OpenGPIO();
-   laser(false);
-   fire(false);
-   calibrate(false);
-   
-   OpenServos();
-   ServoAngle(PAN_SERVO, Pan);
-   ServoAngle(TILT_SERVO, Tilt);
-
-   Setup_Control_C_Signal_Handler_And_Keyboard_No_Enter(); // Set Control-c handler to properly exit clean
-
-   printf("Listening for connections\n");
-   clilen = sizeof(cli_addr);
-   if  ((TcpConnectedPort=AcceptTcpConnection(TcpListenPort,&cli_addr,&clilen))==NULL)
-     {
-       printf("AcceptTcpConnection Failed\n");
-       return(-1);
-     }
-   isConnected=true;
-   printf("Accepted connection Request\n");
-   CloseTcpListenPort(&TcpListenPort);  // Close listen port
-
-  if (!OpenCamera())
-     {
-      printf("Could not Open Camera\n");
-      return(-1);
-     }
-  else printf("Opened Camera\n");
-  
-  CreateNoDataAvalable();
-
-  if (pthread_create(&NetworkThreadID, NULL,NetworkInputThread, NULL)!=0)
-   {
-     printf("Failed to Create Network Input Thread\n");
-     exit(0);
-   }
-  if (pthread_create(&EngagementThreadID, NULL,EngagementThread, NULL)!=0)
-   {
-     printf("Failed to Create ,Engagement Thread\n");
-     exit(0);
-   }
-   if (pthread_create(&DetectThreadID, NULL,DetectThread, NULL)!=0)
-   {
-     printf("Failed to Create Detect Input Thread\n");
-     exit(0);
-   }
-
-  do
-   {
-    Tbegin = chrono::steady_clock::now();
     
-    if (!GetFrame(Frame))
-        {
-         printf("ERROR! blank frame grabbed\n");
-         continue;
-        }
-
-    HandleInputChar(Frame);                           // Handle Keyboard Input
-#if USE_TFLITE
-
-    DetectResult* res = detector->detect(Frame); 
-    for (i = 0; i < detector->DETECT_NUM; ++i) 
-        {
-	  int labelnum = res[i].label;
-	  float score = res[i].score;
-	  float xmin = res[i].xmin;
-	  float xmax = res[i].xmax;
-	  float ymin = res[i].ymin;
-	  float ymax = res[i].ymax;
-          int baseline=0;
-                
-          if (score<0.10) continue;
-                    
-          cv::rectangle(Frame, Point(xmin,ymin), Point(xmax,ymax), Scalar(10, 255, 0), 2);
-          cv::String label =to_string(labelnum) + ": " + to_string(int(score*100))+ "%";
-               
-          Size labelSize= cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2,&baseline); // Get font size
-          int label_ymin = std::max((int)ymin, (int)(labelSize.height + 10)); // Make sure not to draw label too close to top of window
-          rectangle(Frame, Point(xmin, label_ymin-labelSize.height-10), Point(xmin+labelSize.width, label_ymin+baseline-10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
-          putText(Frame, label, Point(xmin, label_ymin-7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
-       }
-   delete[] res;
-#elif USE_IMAGE_MATCH
-         TEngagementState tmpstate=AutoEngage.State;
-
-        // ZOO
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
-        //  ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
-        
-        ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-        if (tmpstate!=ENGAGEMENT_IN_PROGRESS) detector->draw(Frame);
-#endif
-#define FPS_XPOS 0
-#define FPS_YPOS 20
-    cv::String FPS_label =format("FPS %0.2f",avfps / 16);
-    int FPS_baseline=0;
-                      
-    Size FPS_labelSize= cv::getTextSize(FPS_label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2,&FPS_baseline); // Get font size
-    int FPS_label_ymin = std::max((int)FPS_YPOS, (int)(FPS_labelSize.height + 10)); // Make sure not to draw label too close to top of window
-    rectangle(Frame, Point(FPS_XPOS, FPS_label_ymin-FPS_labelSize.height-10), Point(FPS_XPOS+FPS_labelSize.width, FPS_label_ymin+FPS_baseline-10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
-    putText(Frame, FPS_label, Point(FPS_XPOS, FPS_label_ymin-7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
-
-   if (SystemState==SAFE)
-      {
-        Frame=NoDataAvalable.clone();
-        resize(Frame, ResizedFrame, Size(Frame.cols/2,Frame.rows/2));
-      } 
-   else
-     {
-      resize(Frame, ResizedFrame, Size(Frame.cols/2,Frame.rows/2));
-      DrawCrosshair(ResizedFrame,Point((int)xCorrect,(int)yCorrect),Scalar(0, 0, 255)); //BGR
-     }
-
     
-    if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort,ResizedFrame)<0))  break;
-   
-    Tend = chrono::steady_clock::now();
-    avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
-    if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;
-    for (avfps = 0.0, i = 0; i < 16; i++) { avfps += FPS[i]; }
-  } while (isConnected);
+    OpenGPIO();
+    laser(false);
+    fire(false);
+    calibrate(false);
 
-  printf("Main Thread Exiting\n");
-  CleanUp();
+    OpenServos();
+    ServoAngle(PAN_SERVO, Pan);
+    ServoAngle(TILT_SERVO, Tilt);
+    isConnected = false;
+
+    Setup_Control_C_Signal_Handler_And_Keyboard_No_Enter(); // Set Control-c handler to properly exit clean
+
+
+
+
+    //------------init end--------------
+
+    if ((TcpListenPort = OpenTcpListenPort(PORT)) == NULL)  // Open TCP Network port
+    {
+        printf("OpenTcpListenPortFailed\n");
+        return(-1);
+    }
+
+	while (1) {
+		if (isConnected)
+		{
+			// do not accept the nother connection
+			usleep(1000 * 1000);
+			continue;
+		}
+		printf("Listening for connections\n");
+		clilen = sizeof(cli_addr);
+
+		if ((TcpConnectedPort = AcceptTcpConnection(TcpListenPort, &cli_addr, &clilen)) == NULL)
+		{
+			printf("AcceptTcpConnection Failed\n");
+			return(-1);
+		}
+		isConnected = true;
+		printf("Accepted connection Request\n");
+		//start a new thread to handle the client logic:
+		if (pthread_create(&ClientThreadID, NULL, ClientHandlingThread, NULL) != 0)
+		{
+			printf("Failed to Create Client Handling Thread\n");
+			exit(0);
+		}
+  }
   return 0;
 }
 //------------------------------------------------------------------------------------------------
@@ -1219,45 +1148,45 @@ static void ProcessCommands(unsigned char cmd)
         fire(false);
         SendSystemState(SystemState);
         break;
-    case STOP:
+    case CMD_STOP:
         enterSafe(SAFE);
         SendSystemState(SystemState);
         break;
-    case PAUSE:
+    case CMD_PAUSE:
         enterPrearm(PREARMED, false);
         SendSystemState(SystemState);
         break;
-    case RESUME:
+    case CMD_RESUME:
         //todo
         enterPrearm(ENGAGE_AUTO);
         SendSystemState(SystemState);
         break;
-    case CAMERA_ON:
+    case CMD_CAMERA_ON:
         //todo: reply the result to RUI
-        if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) ||
-            (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
-            {
-                if (!OpenCamera())
-                {
-                    printf("Could not Open Camera\n");
-                }
-                else printf("Opened Camera\n");
-            }
+		if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
+            ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+			{
+				if (!OpenCamera())
+				{
+					printf("Could not Open Camera\n");
+				}
+				else printf("Opened Camera\n");
+			}
 			break;
-         case CAMERA_OFF:
-             //todo: reply the result to RUI
-             if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) ||
-                 (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
-				 {
-                     CloseCamera();
-             }
-             break;
+	case CMD_CAMERA_OFF:
+		//todo: reply the result to RUI
+		if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
+            ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+			{
+				CloseCamera();
+			 }
+			 break;
 
 
 
-         default:
-              printf("invalid command %x\n",cmd);
-              break;
+	default:
+		printf("invalid command %x\n", cmd);
+		break;
       }
 
 }
@@ -1302,6 +1231,126 @@ static void ProcessCalibCommands(unsigned char cmd)
 // END static void ProcessCalibCommands
 //------------------------------------------------------------------------------------------------
 
+
+static void* ClientHandlingThread(void* data) {
+
+    Mat                              Frame, ResizedFrame;      // camera image in Mat format 
+    float                            avfps = 0.0, FPS[16] = { 0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0,
+                                                        0.0,0.0,0.0,0.0 };
+    int                              retval, i, Fcnt = 0;
+    struct sockaddr_in               cli_addr;
+    socklen_t                        clilen;
+    chrono::steady_clock::time_point Tbegin, Tend;
+
+
+    if (!OpenCamera())
+    {
+        printf("Could not Open Camera\n");
+        exit(0);
+    }
+    else printf("Opened Camera\n");
+
+    CreateNoDataAvalable();
+
+    if (pthread_create(&NetworkThreadID, NULL, NetworkInputThread, NULL) != 0)
+    {
+        printf("Failed to Create Network Input Thread\n");
+        exit(0);
+    }
+    if (pthread_create(&EngagementThreadID, NULL, EngagementThread, NULL) != 0)
+    {
+        printf("Failed to Create ,Engagement Thread\n");
+        exit(0);
+    }
+    if (pthread_create(&DetectThreadID, NULL, DetectThread, NULL) != 0)
+    {
+        printf("Failed to Create Detect Input Thread\n");
+        exit(0);
+    }
+
+    do 
+    {
+        Tbegin = chrono::steady_clock::now();
+
+        if (!GetFrame(Frame))
+        {
+            printf("ERROR! blank frame grabbed\n");
+            //continue;
+        }
+
+        HandleInputChar(Frame);                           // Handle Keyboard Input
+#if USE_TFLITE
+
+        DetectResult* res = detector->detect(Frame);
+        for (i = 0; i < detector->DETECT_NUM; ++i)
+        {
+            int labelnum = res[i].label;
+            float score = res[i].score;
+            float xmin = res[i].xmin;
+            float xmax = res[i].xmax;
+            float ymin = res[i].ymin;
+            float ymax = res[i].ymax;
+            int baseline = 0;
+
+            if (score < 0.10) continue;
+
+            cv::rectangle(Frame, Point(xmin, ymin), Point(xmax, ymax), Scalar(10, 255, 0), 2);
+            cv::String label = to_string(labelnum) + ": " + to_string(int(score * 100)) + "%";
+
+            Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &baseline); // Get font size
+            int label_ymin = std::max((int)ymin, (int)(labelSize.height + 10)); // Make sure not to draw label too close to top of window
+            rectangle(Frame, Point(xmin, label_ymin - labelSize.height - 10), Point(xmin + labelSize.width, label_ymin + baseline - 10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
+            putText(Frame, label, Point(xmin, label_ymin - 7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
+        }
+        delete[] res;
+#elif USE_IMAGE_MATCH
+        TEngagementState tmpstate = AutoEngage.State;
+
+        // ZOO
+        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
+        //  ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
+        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
+
+        ProcessTargetEngagements(&AutoEngage, Frame.cols, Frame.rows);
+        if (tmpstate != ENGAGEMENT_IN_PROGRESS) detector->draw(Frame);
+#endif
+#define FPS_XPOS 0
+#define FPS_YPOS 20
+        cv::String FPS_label = format("FPS %0.2f", avfps / 16);
+        int FPS_baseline = 0;
+
+        Size FPS_labelSize = cv::getTextSize(FPS_label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &FPS_baseline); // Get font size
+        int FPS_label_ymin = std::max((int)FPS_YPOS, (int)(FPS_labelSize.height + 10)); // Make sure not to draw label too close to top of window
+        rectangle(Frame, Point(FPS_XPOS, FPS_label_ymin - FPS_labelSize.height - 10), Point(FPS_XPOS + FPS_labelSize.width, FPS_label_ymin + FPS_baseline - 10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
+        putText(Frame, FPS_label, Point(FPS_XPOS, FPS_label_ymin - 7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
+
+        if (SystemState == SAFE)
+        {
+            Frame = NoDataAvalable.clone();
+            resize(Frame, ResizedFrame, Size(Frame.cols / 2, Frame.rows / 2));
+        }
+        else
+        {
+            resize(Frame, ResizedFrame, Size(Frame.cols / 2, Frame.rows / 2));
+            DrawCrosshair(ResizedFrame, Point((int)xCorrect, (int)yCorrect), Scalar(0, 0, 255)); //BGR
+        }
+
+
+        if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
+
+        Tend = chrono::steady_clock::now();
+        avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
+        if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;
+        for (avfps = 0.0, i = 0; i < 16; i++) { avfps += FPS[i]; }
+    } while (isConnected);
+
+    printf("Client Thread Exiting\n");
+    CleanClientThread();
+}
+
+
 //------------------------------------------------------------------------------------------------
 // static void *NetworkInputThread
 //------------------------------------------------------------------------------------------------
@@ -1319,7 +1368,7 @@ static void *NetworkInputThread(void *data)
      {
       if (retval==0) printf("Client Disconnnected\n");
       else printf("Connecton Lost %s\n", strerror(errno));
-      enterSafe();
+      enterSafe(SAFE);
       break;
      }
    MsgHdr=(TMesssageHeader *)Buffer;
@@ -1335,6 +1384,7 @@ static void *NetworkInputThread(void *data)
      {
       if (retval==0) printf("Client Disconnnected\n");
       else printf("Connecton Lost %s\n", strerror(errno));
+      enterSafe(SAFE);
       break;
      }
 
@@ -1479,6 +1529,64 @@ RestoreKeyboard();                // restore Keyboard
 //-----------------------------------------------------------------
 // END CleanUp
 //-----------------------------------------------------------------
+
+static void CleanClientThread(void)
+{
+    void* res;
+    int s;
+
+    if (NetworkThreadID != -1)
+    {
+        //printf("Cancel Network Thread\n");
+        s = pthread_cancel(NetworkThreadID);
+        if (s != 0)  printf("Network Thread Cancel Failure\n");
+
+        //printf("Network Thread Join\n"); 
+        s = pthread_join(NetworkThreadID, &res);
+        if (s != 0)   printf("Network Thread Join Failure\n");
+
+        if (res == PTHREAD_CANCELED)
+            printf("Network Thread canceled\n");
+        else
+            printf("Network Thread was not canceled\n");
+    }
+    if (EngagementThreadID != -1)
+    {
+        //printf("Cancel Engagement Thread\n");
+        s = pthread_cancel(EngagementThreadID);
+        if (s != 0)  printf("Engagement Thread Cancel Failure\n");
+
+        //printf("Engagement Thread Join\n"); 
+        s = pthread_join(EngagementThreadID, &res);
+        if (s != 0)   printf("Engagement  Thread Join Failure\n");
+
+        if (res == PTHREAD_CANCELED)
+            printf("Engagement Thread canceled\n");
+        else
+            printf("Engagement Thread was not canceled\n");
+    }
+    if (DetectThreadID != -1)
+    {
+        //printf("Cancel Detect Thread\n");
+        s = pthread_cancel(DetectThreadID);
+        if (s != 0)  printf("Detect Thread Cancel Failure\n");
+
+        //printf("Detect Thread Join\n"); 
+        s = pthread_join(DetectThreadID, &res);
+        if (s != 0)   printf("Detect Thread Join Failure\n");
+
+        if (res == PTHREAD_CANCELED)
+            printf("Detect Thread canceled\n");
+        else
+            printf("Detect Thread was not canceled\n");
+    }
+
+    laser(false);
+    fire(false);
+    calibrate(false);
+}
+
+// 
 //----------------------------------------------------------------
 // Control_C_Handler - called when control-c pressed
 //-----------------------------------------------------------------

@@ -24,14 +24,12 @@
 #define PAN_DOWN_STOP   0xF7
 #define FIRE_STOP       0xEF
 //New command
-#define STOP       0x11
-#define PAUSE      0x12
-#define RESUME     0x13
+#define CMD_STOP       0x11
+#define CMD_PAUSE      0x12
+#define CMD_RESUME     0x13
 
-#define CAMERA_ON       0x14
-#define CAMERA_OFF      0x15
-#define LASER_ON        0x16
-#define LASER_OFF       0x17
+#define CMD_CAMERA_ON       0x14
+#define CMD_CAMERA_OFF      0x15
 
 #define DEC_X           0x01
 #define INC_X           0x02
