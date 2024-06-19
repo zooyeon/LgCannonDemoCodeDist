@@ -918,17 +918,20 @@ static void * DetectThread(void *data)
     printf("start DetectThread()\n");
   Mat Frame;
   while (1) {
+      if (!isCameraOn)
+      {
+          usleep(500 * 1000);
+          continue;
+      }
+
     TEngagementState tmpstate=AutoEngage.State;
     if (tmpstate!=ENGAGEMENT_IN_PROGRESS) {
-        if (isCameraOn == true)
-        {
-            if (!GetFrame(Frame))
-            {
-                printf("ERROR! blank frame grabbed\n");
-                continue;
-            }
-            detector->detect(Frame);
-        }
+		if (!GetFrame(Frame))
+		{
+			printf("ERROR! blank frame grabbed\n");
+			continue;
+		}
+		detector->detect(Frame);
     }
     usleep(100);
   }
@@ -1012,11 +1015,13 @@ static void ProcessPreArm(char * Code)
 
  if (SystemState==SAFE)
   {
+     printf("current state is Safe\n");
     if ((Code[sizeof(Decode)]==0) && (strlen(Code)==sizeof(Decode)))
       { 
         for (int i=0;i<sizeof(Decode);i++) Code[i]^=Decode[i];
         if (strcmp((const char*)Code,"PREARMED")==0)
           {
+            printf("change the system to prearm, code = %s, Decode = %s\n", Code, Decode);
             SystemState=PREARMED;
             SendSystemState(SystemState);
           } 
@@ -1196,33 +1201,32 @@ static void ProcessCommands(unsigned char cmd)
         SendSystemState(SystemState);
         break;
     case CMD_RESUME:
-        //todo
         printf("Get command to Resume\n");
         enterPrearm(ENGAGE_AUTO);
         SendSystemState(SystemState);
         break;
-    case CMD_CAMERA_ON:
-        printf("Get command to Open Camera\n");
-        //todo: reply the result to RUI
-		if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
-            ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
-			{
-				if (!OpenCamera())
-				{
-					printf("Could not Open Camera\n");
-				}
-				else printf("Opened Camera\n");
-			}
-			break;
-	case CMD_CAMERA_OFF:
-		//todo: reply the result to RUI
-        printf("Get command to Close Camera\n");
-		if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
-            ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
-			{
-				CloseCamera();
-			 }
-			 break;
+ //   case CMD_CAMERA_ON:
+ //       printf("Get command to Open Camera\n");
+ //       //todo: reply the result to RUI
+	//	if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
+ //           ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+	//		{
+	//			if (!OpenCamera())
+	//			{
+	//				printf("Could not Open Camera\n");
+	//			}
+	//			else printf("Opened Camera\n");
+	//		}
+	//		break;
+	//case CMD_CAMERA_OFF:
+	//	//todo: reply the result to RUI
+ //       printf("Get command to Close Camera\n");
+	//	if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL) || 
+ //           ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED))
+	//		{
+	//			CloseCamera();
+	//		 }
+	//		 break;
 
 
 
