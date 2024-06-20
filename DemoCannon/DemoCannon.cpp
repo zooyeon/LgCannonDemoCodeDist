@@ -747,13 +747,12 @@ static void DrawCrosshair(Mat &img, Point correct, const Scalar &color)
 //------------------------------------------------------------------------------------------------
 int main(int argc, const char** argv)
 {
-
-  Mat                              Frame, ResizedFrame;      // camera image in Mat format 
-  float                            avfps = 0.0, FPS[16] = { 0.0,0.0,0.0,0.0,
+Mat                              Frame,ResizedFrame;      // camera image in Mat format
+  float                            avfps=0.0,FPS[16]={0.0,0.0,0.0,0.0,
                                                       0.0,0.0,0.0,0.0,
                                                       0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0 };
-  int                              retval, i, Fcnt = 0;
+                                                      0.0,0.0,0.0,0.0};
+  int                              retval,i,Fcnt = 0;
   struct sockaddr_in               cli_addr;
   socklen_t                        clilen;
   chrono::steady_clock::time_point Tbegin, Tend;
@@ -762,9 +761,9 @@ int main(int argc, const char** argv)
 
   for (i = 0; i < 16; i++) FPS[i] = 0.0;
 
-  AutoEngage.State = NOT_ACTIVE;
-  AutoEngage.HaveFiringOrder = false;
-  AutoEngage.NumberOfTartgets = 0;
+  AutoEngage.State=NOT_ACTIVE;
+  AutoEngage.HaveFiringOrder=false;
+  AutoEngage.NumberOfTartgets=0;
 
   pthread_mutexattr_init(&TCP_MutexAttr);
   pthread_mutexattr_settype(&TCP_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
@@ -775,13 +774,13 @@ int main(int argc, const char** argv)
   pthread_mutexattr_init(&Engmnt_MutexAttr);
   pthread_mutexattr_settype(&Engmnt_MutexAttr, PTHREAD_MUTEX_ERRORCHECK);
 
-  if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr) != 0) return -1;
-  if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr) != 0) return -1;
-  if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr) != 0) return -1;
-  if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr) != 0) return -1;
+  if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr)!=0) return -1;
+  if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr)!=0) return -1;
+  if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr)!=0) return -1;
+  if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr)!=0) return -1;
 
-  HaveOLED = OLEDInit();
-
+  HaveOLED=OLEDInit();
+  
   printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
 
   //printf("OpenCV: %s", cv::getBuildInformation().c_str());
@@ -1125,85 +1124,82 @@ static void ProcessFiringOrder(char * FiringOrder)
 //------------------------------------------------------------------------------------------------
 static void ProcessCommands(unsigned char cmd)
 {
-  printf("start ProcessCommands()\n");
-  if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
-      ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
-  {
-      printf("received Commands outside of Pre-Arm or Armed Manual State %x \n", cmd);
+ if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=PREARMED) &&
+     ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL))
+    {
+      printf("received Commands outside of Pre-Arm or Armed Manual State %x \n",cmd);
       return;
-  }
-  if (((cmd == FIRE_START) || (cmd == FIRE_STOP)) && ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
-  {
-      printf("received Fire Commands outside of Armed Manual State %x \n", cmd);
+    }
+ if (((cmd==FIRE_START) || (cmd==FIRE_STOP)) && ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL))
+    {
+      printf("received Fire Commands outside of Armed Manual State %x \n",cmd);
       return;
-  }
+    }
 
 
-  switch (cmd)
-  {
-  case PAN_LEFT_START:
-      RunCmds |= PAN_LEFT_START;
-      RunCmds &= PAN_RIGHT_STOP;
-      Pan += INC;
-      ServoAngle(PAN_SERVO, Pan);
-      break;
-  case PAN_RIGHT_START:
-      RunCmds |= PAN_RIGHT_START;
-      RunCmds &= PAN_LEFT_STOP;
-      Pan -= INC;
-      ServoAngle(PAN_SERVO, Pan);
-      break;
-  case PAN_UP_START:
-    RunCmds |= PAN_UP_START;
-    RunCmds &= PAN_DOWN_STOP;
-    Tilt += INC;
-    ServoAngle(TILT_SERVO, Tilt);
-    break;
-  case PAN_DOWN_START:
-    RunCmds |= PAN_DOWN_START;
-    RunCmds &= PAN_UP_STOP;
-    Tilt -= INC;
-    ServoAngle(TILT_SERVO, Tilt);
-    break;
-  case FIRE_START:
-    printf("Fire start\n");
-    RunCmds |= FIRE_START;
-    fire(true);
-    SendSystemState(SystemState);
-    break;
-  case PAN_LEFT_STOP:
-    RunCmds &= PAN_LEFT_STOP;
-    break;
-  case PAN_RIGHT_STOP:
-    RunCmds &= PAN_RIGHT_STOP;
-    break;
-  case PAN_UP_STOP:
-    RunCmds &= PAN_UP_STOP;
-    break;
-  case PAN_DOWN_STOP:
-    RunCmds &= PAN_DOWN_STOP;
-    break;
-  case FIRE_STOP:
-    printf("Fire stop\n");
-    RunCmds &= FIRE_STOP;
-    fire(false);
-    SendSystemState(SystemState);
-    break;
-  case CMD_STOP:
-    printf("Get command to Stop\n");
-    enterSafe(PREARMED, true);
-    SendSystemState(SystemState);
-    break;
-  case CMD_PAUSE:
-    printf("Get command to Pause\n");
-    enterPrearm(PREARMED, false);
-    SendSystemState(SystemState);
-    break;
-  case CMD_RESUME:
-    printf("Get command to Resume\n");
-    enterPrearm(ENGAGE_AUTO);
-    SendSystemState(SystemState);
-      break;
+      switch(cmd)
+        {
+         case PAN_LEFT_START:
+              RunCmds|=PAN_LEFT_START;
+              RunCmds&=PAN_RIGHT_STOP;
+              Pan+=INC;
+              ServoAngle(PAN_SERVO, Pan);
+              break;
+         case PAN_RIGHT_START:
+              RunCmds|=PAN_RIGHT_START;
+              RunCmds&=PAN_LEFT_STOP;
+              Pan-=INC;
+              ServoAngle(PAN_SERVO, Pan);
+              break;
+         case PAN_UP_START:
+              RunCmds|=PAN_UP_START;
+              RunCmds&=PAN_DOWN_STOP;
+              Tilt+=INC;
+              ServoAngle(TILT_SERVO, Tilt);
+              break;
+         case PAN_DOWN_START:
+              RunCmds|=PAN_DOWN_START;
+              RunCmds&=PAN_UP_STOP;
+              Tilt-=INC;
+              ServoAngle(TILT_SERVO, Tilt);
+              break;
+         case FIRE_START:
+              RunCmds|=FIRE_START;
+              fire(true);
+              SendSystemState(SystemState);
+              break;
+         case PAN_LEFT_STOP:
+              RunCmds&=PAN_LEFT_STOP;
+              break;
+         case PAN_RIGHT_STOP:
+              RunCmds&=PAN_RIGHT_STOP;
+              break;
+         case PAN_UP_STOP:
+              RunCmds&=PAN_UP_STOP;
+              break;
+         case PAN_DOWN_STOP:
+              RunCmds&=PAN_DOWN_STOP;
+              break;
+         case FIRE_STOP:
+              RunCmds&=FIRE_STOP;
+              fire(false);
+              SendSystemState(SystemState);
+              break;
+        case CMD_STOP:
+            printf("Get command to Stop\n");
+            enterSafe(PREARMED, true);
+            SendSystemState(SystemState);
+            break;
+        case CMD_PAUSE:
+            printf("Get command to Pause\n");
+            enterPrearm(PREARMED, false);
+            SendSystemState(SystemState);
+            break;
+        case CMD_RESUME:
+            printf("Get command to Resume\n");
+            enterPrearm(ENGAGE_AUTO);
+            SendSystemState(SystemState);
+            break;
  //   case CMD_CAMERA_ON:
  //       printf("Get command to Open Camera\n");
  //       //todo: reply the result to RUI
@@ -1229,10 +1225,10 @@ static void ProcessCommands(unsigned char cmd)
 
 
 
-  default:
-	printf("invalid command %x\n", cmd);
-	break;
-    }
+          default:
+	        printf("invalid command %x\n", cmd);
+	        break;
+          }
 
 }
 //------------------------------------------------------------------------------------------------
