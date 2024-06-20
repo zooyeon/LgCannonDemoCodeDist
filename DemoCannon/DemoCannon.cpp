@@ -1187,7 +1187,7 @@ static void ProcessCommands(unsigned char cmd)
               break;
         case CMD_STOP:
             printf("Get command to Stop\n");
-            enterSafe(PREARMED, true);
+            enterPrearm(PREARMED);
             SendSystemState(SystemState);
             break;
         case CMD_PAUSE:
