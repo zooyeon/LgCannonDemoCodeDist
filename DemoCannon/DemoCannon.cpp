@@ -134,7 +134,7 @@ static int    SendSystemState(SystemState_t State);
 static bool   compare_float(float x, float y, float epsilon = 0.5f);
 static void   ServoAngle(int Num,float &Angle) ;
 
-static Detector *detector;
+static Detector *detector = nullptr;
 static void laser(bool value);
 static void calibrate(bool value);
 static void fire(bool value);
@@ -221,7 +221,7 @@ static void enterArmedManual(SystemState_t state) {
 
 /*************************************** TF LITE START ********************************************************/ 
 #if USE_TFLITE && !USE_IMAGE_MATCH
-static ObjectDetector *detector;
+static ObjectDetector *detector = nullptr;
 /*************************************** TF LITE END   ********************************************************/ 
 #elif USE_IMAGE_MATCH && !USE_TFLITE
 /*************************************** IMAGE_MATCH START *****************************************************/ 
@@ -783,17 +783,6 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
   
   printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
 
-  //printf("OpenCV: %s", cv::getBuildInformation().c_str());
-
-#if USE_TFLITE
-  printf("TensorFlow Lite Mode\n");
-  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
-#elif USE_IMAGE_MATCH
-
-  detector = new Detector(new OpenCvStrategy());
-
-#endif
-    
     
   OpenGPIO();
   laser(false);
@@ -1275,6 +1264,14 @@ static void* ClientHandlingThread(void* data) {
     socklen_t                        clilen;
     chrono::steady_clock::time_point Tbegin, Tend;
 
+#if USE_TFLITE
+    printf("TensorFlow Lite Mode\n");
+    detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
+#elif USE_IMAGE_MATCH
+
+    detector = new Detector(new OpenCvStrategy());
+
+#endif
 
     if (!OpenCamera())
     {
@@ -1383,6 +1380,11 @@ static void* ClientHandlingThread(void* data) {
     } 
 
     printf("Client Thread Exiting\n");
+    if (detector != nullptr)
+    {
+        delete detector;
+        detctor = nullptr
+    }
     CleanClientThread();
     return NULL;
 }
