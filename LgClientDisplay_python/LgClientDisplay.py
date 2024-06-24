@@ -28,7 +28,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.installEventFilter(self)
 
     def setup_key_event_listeners(self):
-        keys = [
+        self.keys = [
             (Display.KEY_UP_1, self.button_up),
             (Display.KEY_UP_2, self.button_up),
             (Display.KEY_DOWN_1, self.button_down),
@@ -41,7 +41,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             (Display.KEY_FIRE_2, self.button_fire)
         ]
         
-        for key, button in keys:
+        for key, button in self.keys:
             self.bind_key_to_button(key, button)
             keyboard.on_press_key(key, lambda _, k=key: self.handle_key_event(k, True))
             keyboard.on_release_key(key, lambda _, k=key: self.handle_key_event(k, False))
@@ -50,13 +50,6 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         press_handler = keyboard.on_press_key(key, lambda _: button.setDown(True))
         release_handler = keyboard.on_release_key(key, lambda _: button.setDown(False))
         self.handlers[key] = (press_handler, release_handler)
-
-    # def unbind_key_from_button(self, key):
-    #     if key in self.handlers:
-    #         press_handler, release_handler = self.handlers[key]
-    #         keyboard.unhook(press_handler)
-    #         keyboard.unhook(release_handler)
-    #         del self.handlers[key]
 
     def unbind_key_from_button(self, key):
         if key in self.handlers:
@@ -394,6 +387,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.checkbox_laser = QtWidgets.QCheckBox(Display.CHECKBOX_LASER)
         self.checkbox_laser.setContentsMargins(0, 0, 5, 0)
         self.checkbox_cal = QtWidgets.QCheckBox(Display.CHECKBOX_CAL)
+        self.checkbox_cal.stateChanged.connect(self.enter_calibrate)
         self.checkbox_layout.addWidget(self.checkbox_laser)
         self.checkbox_layout.addWidget(self.checkbox_cal)
         self.checkbox_layout.setContentsMargins(0, 0, 0, 15)
@@ -405,6 +399,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.button_up.setFixedSize(icon_size)
         self.button_up.setStyleSheet(self.getButtonManualStyle())
         self.button_up.setContentsMargins(0, 0, 0, 5)
+        self.button_up.setObjectName(Display.KEY_UP_1)
         
         self.button_up_layout = QtWidgets.QHBoxLayout()
         self.button_up_layout.addWidget(self.button_up)
@@ -420,18 +415,21 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.button_left.setIconSize(icon_size)
         self.button_left.setFixedSize(icon_size)
         self.button_left.setStyleSheet(self.getButtonManualStyle())
+        self.button_left.setObjectName(Display.KEY_LEFT_1)
         
         self.button_down = QtWidgets.QPushButton()
         self.button_down.setIcon(QtGui.QIcon(self.resource_path(Display.DOWN_KEY_ICON_PATH)))
         self.button_down.setIconSize(icon_size)
         self.button_down.setFixedSize(icon_size)
         self.button_down.setStyleSheet(self.getButtonManualStyle())
+        self.button_down.setObjectName(Display.KEY_DOWN_1)
         
         self.button_right = QtWidgets.QPushButton()
         self.button_right.setIcon(QtGui.QIcon(self.resource_path(Display.RIGHT_KEY_ICON_PATH)))
         self.button_right.setIconSize(icon_size)
         self.button_right.setFixedSize(icon_size)
         self.button_right.setStyleSheet(self.getButtonManualStyle())
+        self.button_right.setObjectName(Display.KEY_RIGHT_1)
         
         self.button_layout.addWidget(self.button_left)
         self.button_layout.addWidget(self.button_down)
@@ -443,6 +441,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.button_fire.setFixedSize(QtCore.QSize(Display.MANUAL_FIRE_KEY_ICON_WIDTH, Display.MANUAL_FIRE_KEY_ICON_HEIGHT))
         self.button_fire.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         self.button_fire.setStyleSheet(self.getButtonManualStyle())
+        self.button_fire.setObjectName(Display.KEY_FIRE_1)
         
         self.fire_button_layout = QtWidgets.QHBoxLayout()
         self.fire_button_layout.addWidget(self.button_fire)
@@ -745,6 +744,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.pushButton_safe_mode.setStyleSheet(self.getDisabledButtonStyle())
         self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
         self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
+        self.label_camera_video.clear()
     
     def enter_safe_mode(self):
         self.slide_up(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
@@ -783,26 +783,33 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
     
     def enter_armed_manual_mode(self):
-        self.checkbox_laser.setChecked(False)
+        currentState = self.model.get_system_state()
+        if currentState&Setting.LASER_ON:
+            self.checkbox_laser.setChecked(True)
+        else:
+            self.checkbox_laser.setChecked(False)
         self.checkbox_cal.setChecked(False)
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
+        self.pushButton_pre_arm_mode.setEnabled(True)
         self.pushButton_safe_mode.setStyleSheet(self.getButtonStyle())
         self.pushButton_armed_manual.setStyleSheet(self.getSelectedButtonStyle())
         self.pushButton_armed_manual.setEnabled(False)
-        self.pushButton_auto_engage.setStyleSheet(self.getButtonStyle())
-        self.pushButton_auto_engage.setEnabled(True)
+        self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
+        self.pushButton_auto_engage.setEnabled(False)
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_MANUAL)
         self.stackedWidget.setFocus()
         self.button_fire.show()
         self.checkbox_laser.show()
         self.checkbox_cal.show()
+        self.pushButton_auto_engage.setEnabled(False)
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
         
     def enter_auto_engage_mode(self):
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
+        self.pushButton_pre_arm_mode.setEnabled(True)
         self.pushButton_safe_mode.setStyleSheet(self.getButtonStyle())
-        self.pushButton_armed_manual.setStyleSheet(self.getButtonStyle())
-        self.pushButton_armed_manual.setEnabled(True)
+        self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
+        self.pushButton_armed_manual.setEnabled(False)
         self.pushButton_auto_engage.setStyleSheet(self.getSelectedButtonStyle())
         self.pushButton_auto_engage.setEnabled(False)
         self.pushButton_auto_start.setChecked(False)
@@ -816,9 +823,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         if currentState == Setting.SYSTEM_MODE_AUTO_ENGAGE:
             return
         
-        if currentState == Setting.SYSTEM_MODE_ARMED_MANUAL:
+        if currentState&Setting.SYSTEM_MODE_ARMED_MANUAL:
             self.model.key_pressed_signal.emit(key, pressed)
-        elif currentState == Setting.SYSTEM_MODE_PRE_ARM:
+        elif currentState&Setting.SYSTEM_MODE_PRE_ARM:
             if key == Display.KEY_FIRE_1 or key == Display.KEY_FIRE_2:
                 return
             self.model.key_pressed_signal.emit(key, pressed)
@@ -846,3 +853,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             base_path = os.path.abspath(".")
 
         return os.path.join(base_path, relative_path)
+    
+    def enter_calibrate(self, checked):
+        if checked == QtCore.Qt.Checked:
+            self.button_fire.hide()
+        else:
+            self.button_fire.show()
