@@ -12,6 +12,7 @@ public:
     void draw(const cv::Mat& Frame);
     TDetected getDetectedItem(int target);
     void setStrategy(DetectStrategy *strategy);
+    int getNumDetected();
 
 private:
     TDetected detected[20];

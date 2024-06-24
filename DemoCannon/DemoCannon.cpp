@@ -854,7 +854,7 @@ static void * EngagementThread(void *data)
 {
     printf("start EngagementThread()\n");
   int ret;
-  while (1) {
+  while (isConnected) {
     if ((ret = pthread_mutex_lock(&Engmnt_Mutex)) != 0) {
       
       printf("Engmnt_Mutex ERROR\n");
@@ -902,7 +902,7 @@ static void * DetectThread(void *data)
 {
     printf("start DetectThread()\n");
   Mat Frame;
-  while (1) {
+  while (isConnected) {
       if (!isCameraOn)
       {
           usleep(500 * 1000);
@@ -1507,21 +1507,7 @@ static void CleanUp(void)
  int s;
  
 RestoreKeyboard();                // restore Keyboard
-if (ClientThreadID != -1)
-{
-    //printf("Cancel Detect Thread\n");
-    s = pthread_cancel(ClientThreadID);
-    if (s != 0)  printf("Client Handling Thread Cancel Failure\n");
 
-    //printf("Detect Thread Join\n"); 
-    s = pthread_join(ClientThreadID, &res);
-    if (s != 0)   printf("Client Handling Thread Join Failure\n");
-
-    if (res == PTHREAD_CANCELED)
-        printf("Client Handling Thread canceled\n");
-    else
-        printf("Client Handling Thread was not canceled\n");
-}
  if (NetworkThreadID!=-1)
   {
    //printf("Cancel Network Thread\n");
@@ -1566,6 +1552,22 @@ if (ClientThreadID != -1)
        printf("Detect Thread canceled\n"); 
    else
        printf("Detect Thread was not canceled\n"); 
+ }
+
+ if (ClientThreadID != -1)
+ {
+     //printf("Cancel Detect Thread\n");
+     s = pthread_cancel(ClientThreadID);
+     if (s != 0)  printf("Client Handling Thread Cancel Failure\n");
+
+     //printf("Detect Thread Join\n"); 
+     s = pthread_join(ClientThreadID, &res);
+     if (s != 0)   printf("Client Handling Thread Join Failure\n");
+
+     if (res == PTHREAD_CANCELED)
+         printf("Client Handling Thread canceled\n");
+     else
+         printf("Client Handling Thread was not canceled\n");
  }
 
  CloseCamera();
@@ -1649,6 +1651,7 @@ static void Control_C_Handler(int s)
 {
  printf("Caught signal %d\n",s);
  CleanUp();
+ isConnected = false;
  isRunning = false;
  printf("Exiting\n");
  exit(1);
