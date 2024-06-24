@@ -396,7 +396,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.checkbox_cal = QtWidgets.QCheckBox(Display.CHECKBOX_CAL)
         self.checkbox_layout.addWidget(self.checkbox_laser)
         self.checkbox_layout.addWidget(self.checkbox_cal)
-        self.checkbox_layout.setContentsMargins(0, 0, 0, 20)
+        self.checkbox_layout.setContentsMargins(0, 0, 0, 15)
 
         icon_size = QtCore.QSize(Display.MANUAL_DIRECTION_KEY_ICON_SIZE, Display.MANUAL_DIRECTION_KEY_ICON_SIZE)
         self.button_up = QtWidgets.QPushButton()
@@ -778,6 +778,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.button_fire.hide()
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_MANUAL)
         self.stackedWidget.setFocus()
+        self.checkbox_laser.hide()
+        self.checkbox_cal.hide()
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
     
     def enter_armed_manual_mode(self):
@@ -792,6 +794,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_MANUAL)
         self.stackedWidget.setFocus()
         self.button_fire.show()
+        self.checkbox_laser.show()
+        self.checkbox_cal.show()
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
         
     def enter_auto_engage_mode(self):
@@ -827,7 +831,11 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         
     def auto_engage_toggle(self):
         if self.pushButton_auto_start.isChecked():
-            self.pushButton_auto_start.setIcon(self.pause_icon)
+            target_order_text = self.editText_target_order.toPlainText()
+            if target_order_text == "":
+                self.pushButton_auto_start.setIcon(self.play_pause_icon)
+            else:
+                self.pushButton_auto_start.setIcon(self.pause_icon)
         else:
             self.pushButton_auto_start.setIcon(self.play_pause_icon)
             
