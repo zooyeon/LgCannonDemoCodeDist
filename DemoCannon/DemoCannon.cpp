@@ -790,19 +790,7 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
   detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 #elif USE_IMAGE_MATCH
 
-// ZOO
-  // detector = new OpenCvDetector();
-  detector = new Detector(new TfliteStrategy());
-  //  printf("Image Match Mode\n");
-
-  //  DetectedMatches = new  TDetectedMatches[MAX_DETECTED_MATCHES];
-
-
-  //  if (LoadRefImages(symbols) == -1) 
-  //    {
-  //     printf("Error reading reference symbols\n");
-  //     return -1;
-  //    }
+  detector = new Detector(new OpenCvStrategy());
 
 #endif
     
@@ -818,7 +806,6 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
   isConnected = false;
 
   Setup_Control_C_Signal_Handler_And_Keyboard_No_Enter(); // Set Control-c handler to properly exit clean
-
 
 
 
@@ -930,6 +917,7 @@ static void * DetectThread(void *data)
 			continue;
 		}
 		detector->detect(Frame);
+    ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     }
     usleep(100);
   }

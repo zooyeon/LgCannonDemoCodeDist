@@ -88,7 +88,7 @@ int LoadRefImages(Symbol* symbols) {
         sprintf(name, "%d", i);
         symbols[i].img = imread(filename, cv::IMREAD_GRAYSCALE);
         if (!symbols[i].img.data) return -1;
-#define REF_IMG_SCALE 0.50
+#define REF_IMG_SCALE 0.40
         cv::resize(symbols[i].img, symbols[i].img, cv::Size(), REF_IMG_SCALE, REF_IMG_SCALE);
         threshold(symbols[i].img, symbols[i].img, 100, 255, THRESH_BINARY);
         symbols[i].name = name;
