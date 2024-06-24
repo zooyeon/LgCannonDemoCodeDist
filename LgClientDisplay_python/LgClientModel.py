@@ -3,7 +3,7 @@ from constant.SettingConstant import NETWORK_DISCONNECTED, SYSTEM_MODE_UNKNOWN
 
 class LgClientModel(QtCore.QObject):
     log_messages_signal = QtCore.pyqtSignal(list)
-    robot_connected_signal = QtCore.pyqtSignal(int)
+    connection_state_signal = QtCore.pyqtSignal(int)
     system_state_signal = QtCore.pyqtSignal(int)
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
 
@@ -15,7 +15,7 @@ class LgClientModel(QtCore.QObject):
         self.system_state = SYSTEM_MODE_UNKNOWN
         self.log_messages = []
         self.text_from_server = ""
-        self.robot_connected = NETWORK_DISCONNECTED
+        self.connectionState = NETWORK_DISCONNECTED
 
     def set_remote_address(self, address):
         self.remote_address = address
@@ -45,12 +45,12 @@ class LgClientModel(QtCore.QObject):
         self.log_messages.append(f'<span style="color:blue">{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
 
-    def set_robot_connected(self, connected):
-        self.robot_connected = connected
-        self.robot_connected_signal.emit(connected)
+    def set_connection_state(self, connected):
+        self.connectionState = connected
+        self.connection_state_signal.emit(connected)
 
-    def get_robot_connected(self):
-        return self.robot_connected
+    def get_connection_state(self):
+        return self.connectionState
     
     def set_system_state(self, state):
         self.system_state = state
