@@ -8,7 +8,7 @@ from TcpSendReceiver import TcpSendReceiver
 from constant.DisplayConstant import KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2
 from constant.NetworkConfig import AUTO_ENGAGE_PAUSE, AUTO_ENGAGE_RESUME, AUTO_ENGAGE_STOP, DEC_X, DEC_Y, FIRE_START, FIRE_STOP, INC_X, INC_Y, PAN_DOWN_START, \
                                     PAN_DOWN_STOP, PAN_LEFT_START, PAN_LEFT_STOP, PAN_RIGHT_START, PAN_RIGHT_STOP, PAN_UP_START, PAN_UP_STOP, REMOTE_PORT_NUM
-from constant.SettingConstant import CALIB_ON, LASER_ON, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, \
+from constant.SettingConstant import LASER_ON, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, \
                                     SYSTEM_MODE_PRE_ARM, SYSTEM_MODE_SAFE, SYSTEM_MODE_UNKNOWN
 
 
@@ -31,8 +31,9 @@ class LgClientController(QtCore.QThread):
         
         # Control button
         self.ui.checkbox_laser.stateChanged.connect(self.enqueue_set_laser)
-        self.ui.checkbox_cal.stateChanged.connect(self.enqueue_set_calibrate)
         self.model.key_pressed_signal.connect(self.enqueue_set_key_event)
+        for key, button in self.ui.keys:
+            button.clicked.connect(lambda checked, obj_name=button.objectName(): self.enqueue_set_click_event(obj_name))
 
         self.set_ui_update_signal()
         self.ui.show()
@@ -44,7 +45,7 @@ class LgClientController(QtCore.QThread):
 
     def set_ui_update_signal(self):
         self.model.log_messages_signal.connect(self.ui.update_log)
-        self.model.robot_connected_signal.connect(self.ui.connection_state_changed)
+        self.model.connection_state_signal.connect(self.ui.connection_state_changed)
         self.model.system_state_signal.connect(self.ui.system_state_changed)
 
     def run(self):
@@ -58,7 +59,13 @@ class LgClientController(QtCore.QThread):
     
     # Queue Function
     def enqueue_connect_to_server(self):
-        self.event_queue.put((self.connect_to_server, []))
+        connectionState = self.model.get_connection_state()
+        if connectionState != NETWORK_DISCONNECTED:
+            if hasattr(self, 'tcpSendReceive'):
+                self.tcpSendReceive.disconnect()
+            self.update_connection(NETWORK_DISCONNECTED)
+        else:
+            self.event_queue.put((self.connect_to_server, [connectionState]))
 
     def enqueue_set_safe_code(self):
         self.event_queue.put((self.set_safe_mode, []))
@@ -75,18 +82,17 @@ class LgClientController(QtCore.QThread):
     def enqueue_set_laser(self, state):
         self.event_queue.put((self.set_laser_state, [state]))
         
-    def enqueue_set_calibrate(self, state):
-        self.event_queue.put((self.set_calibrate, [state]))
-
     def enqueue_set_auto_engage_start(self):
         self.event_queue.put((self.set_auto_engage_start, []))
         
     def enqueue_set_auto_engage_stop(self):
         self.event_queue.put((self.set_auto_engage_stop, []))
+        
+    def enqueue_set_click_event(self, object_name):
+        self.event_queue.put((self.set_click_event, [object_name]))
 
-    def connect_to_server(self):
-        robot_connected = self.model.get_robot_connected()
-        if robot_connected == NETWORK_DISCONNECTED:
+    def connect_to_server(self, connectionState):
+        if connectionState == NETWORK_DISCONNECTED:
             self.update_connection(NETWORK_CONNECTING)
             remote_address = self.ui.editText_remote_address.toPlainText()
             self.model.set_remote_address(remote_address)
@@ -99,14 +105,8 @@ class LgClientController(QtCore.QThread):
                                                   self.update_state)
             self.tcpSendReceive.connect()
             #TEST
-            # self.model.set_robot_connected(NETWORK_CONNECTED)
+            # self.model.set_connection_state(NETWORK_CONNECTED)
             # self.model.set_system_state(SYSTEM_MODE_SAFE)
-        else:
-            self.tcpSendReceive.disconnect()
-            self.update_connection(NETWORK_DISCONNECTED)
-            #TEST
-            # self.model.set_robot_connected(NETWORK_DISCONNECTED)
-            # self.model.set_system_state(SYSTEM_MODE_UNKNOWN)
 
     def set_safe_mode(self):
         self.model.add_log_message_emphasis("System setting to the Safe-mode.")
@@ -115,6 +115,9 @@ class LgClientController(QtCore.QThread):
         # self.update_state(SYSTEM_MODE_SAFE)
 
     def set_pre_arm_code(self):
+        if self.model.get_pre_arm_code() != "":
+            self.tcpSendReceive.send_state_change_request_to_server(SYSTEM_MODE_PRE_ARM)
+            return
         self.model.add_log_message_emphasis("Send Pre-arm code")
         preArmCode = self.ui.editText_pre_arm_code.toPlainText()
         self.model.set_pre_arm_code(preArmCode)
@@ -129,25 +132,20 @@ class LgClientController(QtCore.QThread):
         # self.update_state(SYSTEM_MODE_ARMED_MANUAL)
 
     def set_laser_state(self, state):
-        self.model.add_log_message_normal("laser : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
         currentState = self.model.get_system_state()
-        mergedState = currentState|LASER_ON if state == QtCore.Qt.Checked else currentState&~LASER_ON
-        self.tcpSendReceive.send_state_change_request_to_server(mergedState)
-
-    def set_calibrate(self, state):
-        self.model.add_log_message_normal("calibrate : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
-        currentState = self.model.get_system_state()
-        mergedState = currentState|CALIB_ON if state == QtCore.Qt.Checked else currentState&~CALIB_ON
-        self.tcpSendReceive.send_state_change_request_to_server(mergedState)
+        if currentState&SYSTEM_MODE_ARMED_MANUAL:
+            self.model.add_log_message_normal("laser : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
+            mergedState = (currentState|LASER_ON) if state == QtCore.Qt.Checked else (currentState&~LASER_ON)
+            self.tcpSendReceive.send_state_change_request_to_server(mergedState)
 
     def set_key_event(self, key, pressed):
         currentState = self.model.get_system_state()
         calChecked = self.ui.checkbox_cal.isChecked()
-        if currentState == SYSTEM_MODE_PRE_ARM:
+        if (currentState&SYSTEM_MODE_PRE_ARM):
             self.handleKeyForPreArmState(key, pressed)
-        elif currentState == SYSTEM_MODE_ARMED_MANUAL and calChecked == False:
+        elif (currentState&SYSTEM_MODE_ARMED_MANUAL) and calChecked == False:
             self.handleKeyForManualState(key, pressed)
-        elif currentState == SYSTEM_MODE_ARMED_MANUAL and calChecked == True:
+        elif (currentState&SYSTEM_MODE_ARMED_MANUAL) and calChecked == True:
             self.handleKeyForCalibrate(key, pressed)
     
     def set_auto_engage_start(self):
@@ -175,7 +173,7 @@ class LgClientController(QtCore.QThread):
 
     def set_auto_engage_stop(self):
         self.model.add_log_message_normal("Stop Auto Engage mode")
-        self.tcpSendReceive.send_command_to_server(AUTO_ENGAGE_STOP)
+        self.tcpSendReceive.send_state_change_request_to_server(SYSTEM_MODE_PRE_ARM)
         #Test
         # self.update_state(SYSTEM_MODE_PRE_ARM)
         
@@ -183,16 +181,18 @@ class LgClientController(QtCore.QThread):
     def update_connection(self, status):
         if status == NETWORK_CONNECTED:
             self.model.add_log_message_normal("Connection Successful")
-            self.model.set_robot_connected(NETWORK_CONNECTED)
+            self.model.set_connection_state(NETWORK_CONNECTED)
         elif status == NETWORK_DISCONNECTED:
             self.model.add_log_message_error("Server Disconnected")
-            self.model.set_robot_connected(NETWORK_DISCONNECTED)
+            self.model.set_connection_state(NETWORK_DISCONNECTED)
         else:
-            self.model.set_robot_connected(NETWORK_CONNECTING)
+            self.model.set_connection_state(NETWORK_CONNECTING)
     
     def update_state(self, state):
         self.model.add_log_message_server(f"[Server] State : {state}")
         self.model.set_system_state(state)
+        if state&SYSTEM_MODE_SAFE:
+            self.model.set_pre_arm_code("")
     
     def update_text(self, text):
         self.model.add_log_message_server(f"[Server] Text : {text}")
@@ -245,6 +245,27 @@ class LgClientController(QtCore.QThread):
         else:
             return
         self.tcpSendReceive.send_calib_to_server(code)
+    
+    def set_click_event(self, objectName):
+        if objectName == KEY_UP_1:
+            startcode = PAN_UP_START
+            endcod = PAN_UP_STOP
+        elif objectName == KEY_LEFT_1:
+            startcode = PAN_LEFT_START
+            endcod = PAN_LEFT_STOP
+        elif objectName == KEY_RIGHT_1:
+            startcode = PAN_RIGHT_START
+            endcod = PAN_RIGHT_STOP
+        elif objectName == KEY_DOWN_1:
+            startcode = PAN_DOWN_START
+            endcod = PAN_DOWN_STOP
+        elif objectName == KEY_FIRE_1:
+            startcode = FIRE_START
+            endcod = FIRE_STOP
+        else:
+            return
+        self.tcpSendReceive.send_command_to_server(startcode)
+        self.tcpSendReceive.send_command_to_server(endcod)
 
 if __name__ == "__main__":
     LgClientController()

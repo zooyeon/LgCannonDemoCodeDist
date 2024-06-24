@@ -5,7 +5,7 @@ import time
 import cv2
 import numpy as np
 import constant.NetworkConfig as Network
-from constant.SettingConstant import NETWORK_CONNECTED, NETWORK_DISCONNECTED
+from constant.SettingConstant import NETWORK_CONNECTED, NETWORK_DISCONNECTED, SYSTEM_MODE_UNKNOWN
 
 class TcpSendReceiver:
     def __init__(self, host, port, connection_callback, image_callback, text_callback, state_callback):
@@ -22,7 +22,7 @@ class TcpSendReceiver:
 
     def connect(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
-        self.client_socket.settimeout(5)
+        self.client_socket.settimeout(3)
         try:
             self.client_socket.connect((self.host, self.port))
             self.client_socket.settimeout(None)
@@ -31,9 +31,7 @@ class TcpSendReceiver:
             self.recv_thread.start()
             self.connection_callback(NETWORK_CONNECTED)
         except socket.error as e:
-            self.client_socket.close()
-            self.client_socket = None
-            self.connection_callback(NETWORK_DISCONNECTED)
+            self.disconnect()
             
         return self.connected
 
@@ -46,6 +44,10 @@ class TcpSendReceiver:
         if self.recv_thread:
             self.recv_thread.join()
         self.connection_callback(NETWORK_DISCONNECTED)
+        self.state_callback(SYSTEM_MODE_UNKNOWN)
+        self.image_callback = None
+        self.text_callback = None
+        self.state_callback = None
 
     def send_message(self, msg_type, msg_data):
         if not self.connected:
