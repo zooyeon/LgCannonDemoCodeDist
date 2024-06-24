@@ -64,6 +64,10 @@ TDetected Detector::getDetectedItem(int target) {
     return ret;
 }
 
+int Detector::getNumDetected() {
+    return numDetected;
+}
+
 void Detector::setStrategy(DetectStrategy *strategy) {
     pthread_mutex_lock(&Mutex);
     delete this->strategy;
