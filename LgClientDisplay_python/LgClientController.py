@@ -31,6 +31,7 @@ class LgClientController(QtCore.QThread):
         
         # Control button
         self.ui.checkbox_laser.stateChanged.connect(self.enqueue_set_laser)
+        self.ui.checkbox_cal.stateChanged.connect(self.enqueue_set_calibrate)
         self.model.key_pressed_signal.connect(self.enqueue_set_key_event)
 
         self.set_ui_update_signal()
@@ -129,14 +130,17 @@ class LgClientController(QtCore.QThread):
 
     def set_laser_state(self, state):
         self.model.add_log_message_normal("laser : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
-        mergedState = SYSTEM_MODE_ARMED_MANUAL|LASER_ON if state == QtCore.Qt.Checked else SYSTEM_MODE_ARMED_MANUAL
+        currentState = self.model.get_system_state()
+        mergedState = currentState|LASER_ON if state == QtCore.Qt.Checked else currentState&~LASER_ON
         self.tcpSendReceive.send_state_change_request_to_server(mergedState)
 
     def set_calibrate(self, state):
-        self.model.add_log_message_normal("laser : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
+        self.model.add_log_message_normal("calibrate : " + ("enabled" if state == QtCore.Qt.Checked else "disabled"))
+        currentState = self.model.get_system_state()
+        mergedState = currentState|CALIB_ON if state == QtCore.Qt.Checked else currentState&~CALIB_ON
+        self.tcpSendReceive.send_state_change_request_to_server(mergedState)
 
     def set_key_event(self, key, pressed):
-        self.model.add_log_message_normal(key + (" pressed" if pressed else " released"))
         currentState = self.model.get_system_state()
         calChecked = self.ui.checkbox_cal.isChecked()
         if currentState == SYSTEM_MODE_PRE_ARM:
@@ -157,6 +161,9 @@ class LgClientController(QtCore.QThread):
             return
         
         targetOrder = self.ui.editText_target_order.toPlainText()
+        if targetOrder == "":
+            self.model.add_log_message_error("Empty Target")
+            return
         self.model.set_target_order(targetOrder)
         self.model.add_log_message_emphasis("Target order : " + targetOrder)
         self.tcpSendReceive.send_target_order_to_server(targetOrder)
