@@ -302,31 +302,6 @@ static bool compare_float(float x, float y, float epsilon)
 static void ServoAngle(int Num,float &Angle)     
 {
   pthread_mutex_lock(&I2C_Mutex);
-
-  /*
-     hobin - accumulated value shall be compared & guaranteeded that it shall exceed the predefined limits (from -15 degrees to 15 degrees)
-  */
-
-  if (Num == TILT_SERVO) {
-
-     printf("TILT_SERVO with value : %f, accumulated TILT_SERVO value : %f \n", Angle, Tilt);
-
-    if ( (Tilt >= 15) || (Tilt <= -15) ) {
-      printf("Error - traverse more than 15 up or down\n");
-      pthread_mutex_unlock(&I2C_Mutex);
-      return;
-    }
-  } else if (Num == PAN_SERVO) {
-
-   printf("PAN_SERVO with value : %f, accumulated PAN_SERVO value : %f \n", Angle, Pan);
-
-    if ( (Pan >= 15) || (Pan <= -15) ){
-      printf("Error - traverse more than 15 degrees left or right \n");
-      pthread_mutex_unlock(&I2C_Mutex);
-      return;
-    }
-  }  
-
   if (Num==TILT_SERVO)
    {
      if (Angle< MIN_TILT) Angle=MIN_TILT; 
