@@ -415,8 +415,8 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
-                        printf("The next move is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        //todo: send notification to RUI
+                        printf("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        PrintfSend("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         enterPrearm(PREARMED, false);
                         break;
                     }
@@ -1664,6 +1664,7 @@ static void CleanClientThread(void)
 static void Control_C_Handler(int s)
 {
  printf("Caught signal %d\n",s);
+ PrintfSend("Robot system cotrol stoped");
  CleanUp();
  isConnected = false;
  isRunning = false;
