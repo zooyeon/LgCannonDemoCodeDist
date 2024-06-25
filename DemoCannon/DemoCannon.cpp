@@ -37,6 +37,8 @@
 #define MAX_TILT         ( 35.0f)
 #define MIN_PAN          (-85.0f)
 #define MAX_PAN          ( 85.0f)
+#define SAFE_TILT        ( 20.0f)
+#define SAFE_PAN         ( 20.0f)
 
 
 #define WIDTH           1920
@@ -301,6 +303,7 @@ static bool compare_float(float x, float y, float epsilon)
 //------------------------------------------------------------------------------------------------
 static void ServoAngle(int Num,float &Angle)     
 {
+    printf("Number(Pan 1, tilt 2): %d - angle = %2f\n", Num, Angle);
   pthread_mutex_lock(&I2C_Mutex);
   if (Num==TILT_SERVO)
    {
@@ -406,10 +409,20 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     float PanError,TiltError;
                     PanError=(item.center.x+xCorrect)-width/2;
                     Pan=Pan-PanError/75;
-                    ServoAngle(PAN_SERVO, Pan);
 
                     TiltError=(item.center.y+yCorrect)-height/2;
                     Tilt=Tilt-TiltError/75;
+
+                    if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
+                    {
+                        printf("The next move is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        //todo: send notification to RUI
+                        enterPrearm(PREARMED, false);
+                        break;
+                    }
+
+
+                    ServoAngle(PAN_SERVO, Pan);
                     ServoAngle(TILT_SERVO, Tilt);
 
                     if ((compare_float(Auto->LastPan,Pan)) && (compare_float(Auto->LastTilt,Tilt)))
@@ -783,6 +796,14 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
   
   printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
 
+#if USE_TFLITE
+  printf("TensorFlow Lite Mode\n");
+  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
+#elif USE_IMAGE_MATCH
+
+  detector = new Detector(new OpenCvStrategy());
+
+#endif
     
   OpenGPIO();
   laser(false);
@@ -1264,15 +1285,6 @@ static void* ClientHandlingThread(void* data) {
     socklen_t                        clilen;
     chrono::steady_clock::time_point Tbegin, Tend;
 
-#if USE_TFLITE
-    printf("TensorFlow Lite Mode\n");
-    detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
-#elif USE_IMAGE_MATCH
-
-    detector = new Detector(new OpenCvStrategy());
-
-#endif
-
     if (!OpenCamera())
     {
         printf("Could not Open Camera\n");
@@ -1380,11 +1392,11 @@ static void* ClientHandlingThread(void* data) {
     } 
 
     printf("Client Thread Exiting\n");
-    if (detector != nullptr)
-    {
-        delete detector;
-        detctor = nullptr
-    }
+    //if (detector != nullptr)
+    //{
+    //    delete detector;
+    //    detector = nullptr;
+    //}
     CleanClientThread();
     return NULL;
 }

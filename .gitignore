@@ -4,3 +4,5 @@
 /LgClientDisplay/.vs
 /LgClientDisplay/LgClientDisplay/Debug
 /LgClientDisplay/X64
+*.exe
+/LgClientDisplay_python/dist
