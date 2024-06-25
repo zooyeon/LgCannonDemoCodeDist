@@ -18,7 +18,7 @@ void TfliteStrategy::sync(TDetected (&detected)[], int &numDetected) {
     numDetected = 0;
     for (int i = 0; i < tf->DETECT_NUM; ++i) 
     {
-        if (res[i].score<0.10) continue;
+        if (res[i].score<0.30) continue;
 
         float x = res[i].xmin + res[i].xmax;
         float y = res[i].ymin + res[i].ymax;
