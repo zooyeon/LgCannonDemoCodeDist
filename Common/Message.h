@@ -30,6 +30,8 @@
 
 #define CMD_CAMERA_ON       0x14
 #define CMD_CAMERA_OFF      0x15
+#define CMD_USE_TF      0x16
+#define CMD_USE_OPENCV      0x17
 
 #define DEC_X           0x01
 #define INC_X           0x02

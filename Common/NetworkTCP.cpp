@@ -259,6 +259,8 @@ void CloseTcpConnectedPort(TTcpConnectedPort **TcpConnectedPort)
 //-----------------------------------------------------------------
 ssize_t ReadDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length)
 {
+if (TcpConnectedPort == NULL)
+    return -1;
  ssize_t bytes;
  
  for (size_t i = 0; i < length; i += bytes)
@@ -278,6 +280,8 @@ ssize_t ReadDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, siz
 //-----------------------------------------------------------------
 ssize_t WriteDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, size_t length)
 {
+    if (TcpConnectedPort == NULL)
+        return -1;
   ssize_t total_bytes_written = 0;
   ssize_t bytes_written;
   while (total_bytes_written != length)
