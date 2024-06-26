@@ -8,6 +8,7 @@ from LgClientModel import LgClientModel
 from NumericPlainTextEdit import NumericPlainTextEdit
 import constant.DisplayConstant as Display
 import constant.SettingConstant as Setting
+import constant.NetworkConfig as Network
 import constant.StyleSheet as Style
 import keyboard
 
@@ -20,7 +21,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             Setting.SYSTEM_MODE_SAFE: self.enter_safe_mode,
             Setting.SYSTEM_MODE_PRE_ARM: self.enter_pre_arm_mode,
             Setting.SYSTEM_MODE_ARMED_MANUAL: self.enter_armed_manual_mode,
-            # Setting.SYSTEM_MODE_AUTO_ENGAGE: self.enter_auto_engage_mode
+            Setting.SYSTEM_MODE_AUTO_ENGAGE: self.enter_auto_engage_mode
         }
         self.handlers = {}
         self.setupUi(self)
@@ -125,7 +126,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.leftLayout.addWidget(self.nonEditText_log)
 
         self.rightLayout = QtWidgets.QVBoxLayout()
+        self.setupAlgoSelectionPanel()
         self.setupCameraVideoPanel()
+        self.rightLayout.addWidget(self.groupBox_algo)
         self.rightLayout.addWidget(self.groupBox_camera_video)
 
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -158,11 +161,13 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.actionExit.setFont(self.getRegularFont())
         self.actionExit.setMenuRole(QtWidgets.QAction.QuitRole)
         self.actionExit.setObjectName(Display.ACTION_EXIT_OBJECT_NAME)
+        self.actionExit.triggered.connect(self.close)
 
         self.actionAbout = QtWidgets.QAction(Display.ACTION_ABOUT, self.menubar)
         self.actionAbout.setFont(self.getRegularFont())
         self.actionAbout.setMenuRole(QtWidgets.QAction.AboutRole)
         self.actionAbout.setObjectName(Display.ACTION_ABOUT_OBJECT_NAME)
+        self.actionAbout.triggered.connect(self.pop_up_action_about)
 
         self.menuFile.addAction(self.actionExit)
         self.menuHelp.addAction(self.actionAbout)
@@ -227,16 +232,13 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_remote_address.setObjectName(Display.GROUPBOX_REMOTE_OBJECT_NAME)
         self.groupBox_remote_address.setStyleSheet(self.getGroupBoxStyle())
         
-        self.editText_remote_address = QtWidgets.QPlainTextEdit(self.groupBox_remote_address)
+        self.editText_remote_address = QtWidgets.QLineEdit(self.groupBox_remote_address)
         self.editText_remote_address.setGeometry(QtCore.QRect(Display.EDIT_TEXT_REMOTE_ADDRESS_LEFT,
                                                               Display.EDIT_TEXT_REMOTE_ADDRESS_TOP,
                                                               Display.EDIT_TEXT_REMOTE_ADDRESS_WIDTH,
                                                               Display.EDIT_TEXT_REMOTE_ADDRESS_HEIGHT))
         self.editText_remote_address.setFont(self.getRegularFont(12))
         self.editText_remote_address.setStyleSheet(Style.EDIT_TEXT_BORDER_NON_STYLE)
-        self.editText_remote_address.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.editText_remote_address.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.editText_remote_address.setCenterOnScroll(False)
         self.editText_remote_address.setObjectName(Display.EDIT_TEXT_REMOTE_ADDRESS_OBJECT_NAME)
 
     def setupConnectionLayout(self, parent):
@@ -307,18 +309,15 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_pre_arm_code.setStyleSheet(self.getGroupBoxStyle())
         self.groupBox_pre_arm_code.setEnabled(False)
         
-        self.editText_pre_arm_code = QtWidgets.QPlainTextEdit(self.groupBox_pre_arm_code)
+        self.editText_pre_arm_code = QtWidgets.QLineEdit(self.groupBox_pre_arm_code)
         self.editText_pre_arm_code.setGeometry(QtCore.QRect(Display.EDIT_TEXT_PRE_ARM_LEFT, 
                                                             Display.EDIT_TEXT_PRE_ARM_TOP,
                                                             Display.EDIT_TEXT_PRE_ARM_WIDTH, 
                                                             Display.EDIT_TEXT_PRE_ARM_HEIGHT))
         self.editText_pre_arm_code.setFont(self.getRegularFont(12))
         self.editText_pre_arm_code.setStyleSheet(Style.EDIT_TEXT_BORDER_NON_STYLE)
-        self.editText_pre_arm_code.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.editText_pre_arm_code.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.editText_pre_arm_code.setReadOnly(False)
-        self.editText_pre_arm_code.setPlainText("")
-        self.editText_pre_arm_code.setCenterOnScroll(False)
+        self.editText_pre_arm_code.setText("")
         self.editText_pre_arm_code.setObjectName(Display.EDIT_TEXT_PRE_ARM_OBJECT_NAME)
 
     def setupArmModeGroup(self, parent):
@@ -387,10 +386,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.checkbox_laser = QtWidgets.QCheckBox(Display.CHECKBOX_LASER)
         self.checkbox_laser.setContentsMargins(0, 0, 5, 0)
         self.checkbox_cal = QtWidgets.QCheckBox(Display.CHECKBOX_CAL)
-        self.checkbox_cal.stateChanged.connect(self.enter_calibrate)
         self.checkbox_layout.addWidget(self.checkbox_laser)
         self.checkbox_layout.addWidget(self.checkbox_cal)
-        self.checkbox_layout.setContentsMargins(0, 0, 0, 15)
+        self.checkbox_layout.setContentsMargins(0, 0, 0, 10)
 
         icon_size = QtCore.QSize(Display.MANUAL_DIRECTION_KEY_ICON_SIZE, Display.MANUAL_DIRECTION_KEY_ICON_SIZE)
         self.button_up = QtWidgets.QPushButton()
@@ -455,7 +453,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
     def setupCommandPanelAuto(self):
         self.auto_widget = QtWidgets.QWidget()
         self.auto_layout = QtWidgets.QVBoxLayout(self.auto_widget)
-        self.auto_layout.setAlignment(QtCore.Qt.AlignCenter)
+        self.auto_layout.setContentsMargins(20, 7, 0, 0)
 
         self.widget_key = QtWidgets.QWidget(self.auto_widget)
         self.widget_key.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
@@ -468,10 +466,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_target_order = QtWidgets.QGroupBox(parent)
         self.groupBox_target_order.setMaximumWidth(Display.GROUPBOX_TARGET_ORDER_WIDTH)
         self.groupBox_target_order.setMaximumHeight(Display.GROUPBOX_TARGET_ORDER_HEIGHT)
-        self.groupBox_target_order.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        self.groupBox_target_order.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred)
         self.groupBox_target_order.setFont(self.getRegularFont(9))
-        self.groupBox_target_order.setAlignment(QtCore.Qt.AlignCenter)
-        self.groupBox_target_order.setContentsMargins(10, 10, 10, 10)
         self.groupBox_target_order.setObjectName(Display.GROUPBOX_TARGET_ORDER_OBJECT_NAME)
         self.groupBox_target_order.setStyleSheet(self.getGroupBoxStyle())
         
@@ -482,14 +478,11 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.editText_target_order.setGeometry(0, 0, Display.GROUPBOX_TARGET_ORDER_WIDTH-10, Display.GROUPBOX_TARGET_ORDER_HEIGHT-10)
         self.editText_target_order.setFont(self.getRegularFont(12))
         self.editText_target_order.setStyleSheet(Style.EDIT_TEXT_BORDER_NON_STYLE)
-        self.editText_target_order.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
-        self.editText_target_order.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.editText_target_order.setReadOnly(False)
-        self.editText_target_order.setPlainText("")
-        self.editText_target_order.setCenterOnScroll(False)
+        self.editText_target_order.setText("")
         self.editText_target_order.setObjectName(Display.EDIT_TEXT_TARGET_ORDER_OBJECT_NAME)
         
-        layout.addWidget(self.editText_target_order, alignment=QtCore.Qt.AlignCenter)
+        layout.addWidget(self.editText_target_order)
         layout.addStretch(1)
     
         self.groupBox_target_order.setLayout(layout)
@@ -499,8 +492,10 @@ class LgClientDisplay(QtWidgets.QMainWindow):
                         Display.BUTTON_KEY_4_OBJECT_NAME, Display.BUTTON_KEY_5_OBJECT_NAME, Display.BUTTON_KEY_6_OBJECT_NAME,
                         Display.BUTTON_KEY_7_OBJECT_NAME, Display.BUTTON_KEY_8_OBJECT_NAME, Display.BUTTON_KEY_9_OBJECT_NAME,
                         Display.BUTTON_KEY_STOP_OBJECT_NAME, Display.BUTTON_KEY_0_OBJECT_NAME, Display.BUTTON_KEY_PLAY_PAUSE_OBJECT_NAME]
-        button_positions = [(5, 8), (80, 8), (155, 8), (5, 53), (80, 53), (155, 53),
-                            (5, 99), (80, 99), (155, 99), (5, 144), (80, 144), (155, 144)]
+        button_positions = [(10, 5), (95, 5), (180, 5),
+                            (10, 54), (95, 54), (180, 54),
+                            (10, 104), (95, 104), (180, 104),
+                            (10, 154), (95, 154), (180, 154)]
 
         for name, pos in zip(button_names, button_positions):
             button = QtWidgets.QPushButton(parent)
@@ -534,12 +529,44 @@ class LgClientDisplay(QtWidgets.QMainWindow):
 
     def setupLogPanel(self):
         self.nonEditText_log = QtWidgets.QTextEdit()
-        self.nonEditText_log.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred)
+        self.nonEditText_log.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         self.nonEditText_log.setFont(self.getRegularFont(11))
         self.nonEditText_log.setStyleSheet(Style.NONEDIT_TEXT_LOG_STYLE)
         self.nonEditText_log.setLineWidth(1)
         self.nonEditText_log.setReadOnly(True)
         self.nonEditText_log.setObjectName(Display.NONEDIT_TEXT_LOG_OBJECT_NAME)
+
+    def setupAlgoSelectionPanel(self):
+        self.groupBox_algo = QtWidgets.QGroupBox()
+        self.groupBox_algo.setEnabled(False)
+        self.groupBox_algo.setSizePolicy(self.getFixedSizePolicy())
+        self.groupBox_algo.setFont(self.getBoldFont(13))
+        self.groupBox_algo.setAlignment(QtCore.Qt.AlignCenter)
+        self.groupBox_algo.setObjectName(Display.GROUPBOX_ALGORITHM_OBJECT_NAME)
+        self.groupBox_algo.setStyleSheet(self.getPanelStyle())
+        
+        # self.pushButton_armed_manual = QtWidgets.QPushButton(self.groupBox_arm_mode)
+        # self.pushButton_armed_manual.setGeometry(QtCore.QRect(Display.BUTTON_ARMED_MANUAL_LEFT, 
+        #                                                       Display.BUTTON_ARMED_MANUAL_TOP, 
+        #                                                       Display.BUTTON_ARMED_MANUAL_WIDTH, 
+        #                                                       Display.BUTTON_ARMED_MANUAL_HEIGHT))
+        # self.pushButton_armed_manual.setFont(self.getRegularFont(11))
+        # self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
+        # self.pushButton_armed_manual.setCheckable(True)
+        # self.pushButton_armed_manual.setObjectName(Display.BUTTON_ARMED_MANUAL_OBJECT_NAME)
+        # self.applyShadowEffect(self.pushButton_armed_manual)
+        
+        # self.pushButton_auto_engage = QtWidgets.QPushButton(self.groupBox_arm_mode)
+        # self.pushButton_auto_engage.setGeometry(QtCore.QRect(Display.BUTTON_AUTO_ENGAGE_LEFT, 
+        #                                                      Display.BUTTON_AUTO_ENGAGE_TOP, 
+        #                                                      Display.BUTTON_AUTO_ENGAGE_WIDTH, 
+        #                                                      Display.BUTTON_AUTO_ENGAGE_HEIGHT))
+        # self.pushButton_auto_engage.setFont(self.getRegularFont(11))
+        # self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
+        # self.pushButton_auto_engage.setCheckable(True)
+        # self.pushButton_auto_engage.setObjectName(Display.BUTTON_AUTO_ENGAGE_OBJECT_NAME)
+        # self.pushButton_auto_engage.clicked.connect(self.enter_auto_engage_mode)
+        # self.applyShadowEffect(self.pushButton_auto_engage)
 
     def setupCameraVideoPanel(self):
         self.groupBox_camera_video = QtWidgets.QGroupBox()
@@ -571,7 +598,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_connection_panel.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_CONNECTION_TITLE))
         self.pushButton_connection.setText(_translate(Display.WINDOW_TITLE, Display.BUTTON_CONNECTION_TITLE_CONNECT))
         self.groupBox_remote_address.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_REMOTE_ADDRESS_TITLE))
-        self.editText_remote_address.setPlainText(_translate(Display.WINDOW_TITLE, Display.EDIT_TEXT_REMOTE_ADDRESS_DEFAULT_TEXT))
+        self.editText_remote_address.setText(_translate(Display.WINDOW_TITLE, Display.EDIT_TEXT_REMOTE_ADDRESS_DEFAULT_TEXT))
+        self.groupBox_algo.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_ALGORITHM_TITLE))
         self.groupBox_camera_video.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_CAMERA_VIDEO_TITLE))
         self.groupBox_system_state_panel.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_SYSTEM_STATE_TITLE))
         self.nonEditText_system_state.setPlainText(_translate(Display.WINDOW_TITLE, Display.NON_EDIT_TEXT_DEFAULT_TEXT))
@@ -693,11 +721,11 @@ class LgClientDisplay(QtWidgets.QMainWindow):
     def target_button_clicked(self):
         sender = self.sender()
         clickedNumber = sender.text()
-        currentTargetOrder = self.editText_target_order.toPlainText()
-        self.editText_target_order.setPlainText(currentTargetOrder + clickedNumber)
+        currentTargetOrder = self.editText_target_order.text()
+        self.editText_target_order.setText(currentTargetOrder + clickedNumber)
     
     def connection_state_changed(self, connected):
-        if connected == Setting.NETWORK_CONNECTED:
+        if connected == Network.NETWORK_CONNECTED:
             self.pushButton_connection.setText(Display.BUTTON_CONNECTION_TITLE_DISCONNECT)
             movie = QMovie(self.resource_path(Display.GIF_ICON_CONNECTED_PATH))
             movie.setSpeed(Display.GIF_SPEED)
@@ -705,7 +733,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             movie.start()
             self.gifLabel.setMovie(movie)
             self.pushButton_connection.setStyleSheet(self.getSelectedButtonStyle())
-        elif connected == Setting.NETWORK_DISCONNECTED:
+        elif connected == Network.NETWORK_DISCONNECTED:
             self.pushButton_connection.setText(Display.BUTTON_CONNECTION_TITLE_CONNECT)
             icon_pixmap = QtGui.QPixmap(self.resource_path(Display.GIF_ICON_PATH))
             scaled_pixmap = icon_pixmap.scaled(Display.GIF_LABEL_WIDTH, Display.GIF_LABEL_WIDTH, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
@@ -733,6 +761,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         return Setting.SYSTEM_MODE_UNKNOWN
     
     def enter_unknown_mode(self):
+        self.editText_target_order.clear()
         self.slide_up(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
         self.groupBox_mode_control_panel.setStyleSheet(self.getDisabledPanelStyle())
         self.groupBox_mode_control_panel.setEnabled(False)
@@ -747,6 +776,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.label_camera_video.clear()
     
     def enter_safe_mode(self):
+        self.editText_target_order.clear()
         self.slide_up(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
         self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
         self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
@@ -770,11 +800,12 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.pushButton_auto_engage.setEnabled(True)
         self.pushButton_safe_mode.setStyleSheet(self.getButtonStyle())
         self.pushButton_safe_mode.setEnabled(True)
-        self.editText_pre_arm_code.setPlainText("")
+        self.editText_pre_arm_code.setText("")
         self.groupBox_pre_arm_code.setStyleSheet(self.getDisabledPanelStyle())
         self.groupBox_pre_arm_code.setEnabled(False)
         self.pushButton_pre_arm_mode.setStyleSheet(self.getSelectedButtonStyle())
-        self.pushButton_pre_arm_mode.setEnabled(False)
+        self.pushButton_auto_start.setChecked(False)
+        self.pushButton_auto_start.setIcon(self.play_pause_icon)
         self.button_fire.hide()
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_MANUAL)
         self.stackedWidget.setFocus()
@@ -783,12 +814,6 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
     
     def enter_armed_manual_mode(self):
-        currentState = self.model.get_system_state()
-        if currentState&Setting.LASER_ON:
-            self.checkbox_laser.setChecked(True)
-        else:
-            self.checkbox_laser.setChecked(False)
-        self.checkbox_cal.setChecked(False)
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
         self.pushButton_pre_arm_mode.setEnabled(True)
         self.pushButton_safe_mode.setStyleSheet(self.getButtonStyle())
@@ -812,8 +837,6 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.pushButton_armed_manual.setEnabled(False)
         self.pushButton_auto_engage.setStyleSheet(self.getSelectedButtonStyle())
         self.pushButton_auto_engage.setEnabled(False)
-        self.pushButton_auto_start.setChecked(False)
-        self.pushButton_auto_start.setIcon(self.play_pause_icon)
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_AUTO)
         self.stackedWidget.setFocus()
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
@@ -838,9 +861,10 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         
     def auto_engage_toggle(self):
         if self.pushButton_auto_start.isChecked():
-            target_order_text = self.editText_target_order.toPlainText()
+            target_order_text = self.editText_target_order.text()
             if target_order_text == "":
                 self.pushButton_auto_start.setIcon(self.play_pause_icon)
+                self.pushButton_auto_start.setChecked(False)
             else:
                 self.pushButton_auto_start.setIcon(self.pause_icon)
         else:
@@ -854,8 +878,26 @@ class LgClientDisplay(QtWidgets.QMainWindow):
 
         return os.path.join(base_path, relative_path)
     
-    def enter_calibrate(self, checked):
-        if checked == QtCore.Qt.Checked:
+    def closeEvent(self, event):
+        reply = QtWidgets.QMessageBox.question(self, Display.MENU_EXIT_DIALOG_TITLE, Display.MENU_EXIT_DIALOG_TEXT,
+                                               QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+        if reply == QtWidgets.QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+            
+    def pop_up_action_about(self):
+        QtWidgets.QMessageBox.information(self, Display.MENU_ABOUT_DIALOG_TITLE, Display.MENU_ABOUT_DIALOG_TEXT)
+        
+    def update_laser_state(self, enabled):
+        self.checkbox_laser.setChecked(enabled)
+        
+    def update_calibrate_state(self, enabled):
+        self.checkbox_cal.setChecked(enabled)
+        if enabled:
             self.button_fire.hide()
         else:
             self.button_fire.show()
+            
+    def update_algorithm(self, algo):
+        print(algo)

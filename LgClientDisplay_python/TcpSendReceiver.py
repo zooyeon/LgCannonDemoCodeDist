@@ -5,10 +5,10 @@ import time
 import cv2
 import numpy as np
 import constant.NetworkConfig as Network
-from constant.SettingConstant import NETWORK_CONNECTED, NETWORK_DISCONNECTED, SYSTEM_MODE_UNKNOWN
+import constant.SettingConstant as Setting
 
 class TcpSendReceiver:
-    def __init__(self, host, port, connection_callback, image_callback, text_callback, state_callback):
+    def __init__(self, host, port, connection_callback, image_callback, text_callback, state_callback, command_callback):
         self.host = host
         self.port = port
         self.client_socket = None
@@ -19,6 +19,7 @@ class TcpSendReceiver:
         self.image_callback = image_callback
         self.text_callback = text_callback
         self.state_callback = state_callback
+        self.command_callback = command_callback
 
     def connect(self):
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
@@ -29,7 +30,7 @@ class TcpSendReceiver:
             self.connected = True
             self.recv_thread = threading.Thread(target=self.recv_data)
             self.recv_thread.start()
-            self.connection_callback(NETWORK_CONNECTED)
+            self.connection_callback(Network.NETWORK_CONNECTED)
         except socket.error as e:
             self.disconnect()
             
@@ -41,10 +42,16 @@ class TcpSendReceiver:
         if self.client_socket:
             self.client_socket.close()
             self.client_socket = None
-        if self.recv_thread:
+        try:
             self.recv_thread.join()
-        self.connection_callback(NETWORK_DISCONNECTED)
-        self.state_callback(SYSTEM_MODE_UNKNOWN)
+        except RuntimeError as e:
+            print(f"Error joining thread: {e}")
+        except Exception as e:
+            print(f"Unexpected error joining thread: {e}")
+        if self.connection_callback:
+            self.connection_callback(Network.NETWORK_DISCONNECTED)
+        if self.state_callback:
+            self.state_callback(Setting.SYSTEM_MODE_UNKNOWN)
         self.image_callback = None
         self.text_callback = None
         self.state_callback = None
@@ -93,7 +100,9 @@ class TcpSendReceiver:
                     self.process_image(msg_data)
                 elif msg_type == Network.MT_TEXT:
                     self.process_text(msg_data)
-                print("")
+                elif msg_type == Network.MT_COMMANDS:
+                    self.process_command(msg_data)
+                    print(msg_data)
 
             except socket.error as e:
                 self.disconnect()
@@ -105,11 +114,15 @@ class TcpSendReceiver:
     def process_image(self, img_data):
         np_arr = np.frombuffer(img_data, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        last_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if image is not None:
-            self.image_callback(image)
+            self.image_callback(last_image)
 
     def process_text(self, text_data):
         self.text_callback(text_data.decode())
+        
+    def process_command(self, cmd):
+        self.command_callback(int.from_bytes(cmd, byteorder='big'))
 
     def is_connected(self):
         return self.connected
