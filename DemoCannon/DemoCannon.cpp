@@ -102,11 +102,11 @@ static volatile SystemState_t SystemState= SAFE;
 static pthread_mutex_t        TCP_Mutex;
 static pthread_mutex_t        GPIO_Mutex;
 static pthread_mutex_t        I2C_Mutex;
-static pthread_mutex_t        Engmnt_Mutex;
+static pthread_mutex_t        Detect_Mutex;
 static pthread_mutexattr_t    TCP_MutexAttr;
 static pthread_mutexattr_t    GPIO_MutexAttr;
 static pthread_mutexattr_t    I2C_MutexAttr;
-static pthread_mutexattr_t    Engmnt_MutexAttr;
+static pthread_mutexattr_t    Detect_MutexAttr;
 static float                  xCorrect=60.0,yCorrect=-90.0;
 static volatile bool          isConnected=false;
 static volatile bool          isRunning = false;
@@ -825,13 +825,13 @@ int main(int argc, const char** argv)
   pthread_mutexattr_settype(&GPIO_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
   pthread_mutexattr_init(&I2C_MutexAttr);
   pthread_mutexattr_settype(&I2C_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutexattr_init(&Engmnt_MutexAttr);
-  pthread_mutexattr_settype(&Engmnt_MutexAttr, PTHREAD_MUTEX_ERRORCHECK);
+  pthread_mutexattr_init(&Detect_MutexAttr);
+  pthread_mutexattr_settype(&Detect_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
 
   if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr)!=0) return -1;
   if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr)!=0) return -1;
   if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr)!=0) return -1;
-  if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr)!=0) return -1;
+  if (pthread_mutex_init(&Detect_Mutex, &Detect_MutexAttr)!=0) return -1;
 
   HaveOLED=OLEDInit();
 
@@ -920,7 +920,11 @@ static void * DetectThread(void *data)
       continue;
     }
 
-    if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) detector->detect(Frame);
+    if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) {
+      pthread_mutex_lock(&Detect_Mutex);
+      detector->detect(Frame);
+      pthread_mutex_unlock(&Detect_Mutex);
+    }
     ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     usleep(200);
   }
@@ -1099,6 +1103,7 @@ static void ProcessStateChangeRequest(SystemState_t state)
 //------------------------------------------------------------------------------------------------
 static void ProcessStrategyChangeRequest(unsigned char strategy)
 {
+  pthread_mutex_lock(&Detect_Mutex);
   if (strategy == CMD_USE_OPENCV) {
     detector->setStrategy(openCvStrategy);
     epsilon = CV_EPSILON;
@@ -1107,6 +1112,7 @@ static void ProcessStrategyChangeRequest(unsigned char strategy)
     epsilon = TF_EPSILON;
   }
   currentAlgorithm = strategy;
+  pthread_mutex_unlock(&Detect_Mutex);
 }
 //------------------------------------------------------------------------------------------------
 // END static void ProcessStrategyChangeRequest
