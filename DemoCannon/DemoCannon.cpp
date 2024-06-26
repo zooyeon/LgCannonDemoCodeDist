@@ -40,6 +40,8 @@
 #define SAFE_TILT        ( 20.0f)
 #define SAFE_PAN         ( 20.0f)
 
+#define TF_EPSILON      1.2
+#define CV_EPSILON      0.5
 
 #define WIDTH           1920
 #define HEIGHT          1080
@@ -78,6 +80,12 @@ typedef struct
  int                       Target;
 } TAutoEngage;
 
+// hobin
+typedef struct
+{
+ int                       NumberOfTartgets;
+ int                       Target;
+} THitMissComparison;
 
 static TAutoEngage            AutoEngage;
 static float                  Pan=0.0f;
@@ -88,7 +96,6 @@ static uint8_t                i2c_node_address = 1;
 static bool                   HaveOLED=false;
 static int                    OLED_Font=0;
 static pthread_t              NetworkThreadID=-1;
-static pthread_t              EngagementThreadID=-1;
 static pthread_t              DetectThreadID=-1;
 static pthread_t              ClientThreadID = -1;
 static volatile SystemState_t SystemState= SAFE;
@@ -100,20 +107,19 @@ static pthread_mutexattr_t    TCP_MutexAttr;
 static pthread_mutexattr_t    GPIO_MutexAttr;
 static pthread_mutexattr_t    I2C_MutexAttr;
 static pthread_mutexattr_t    Engmnt_MutexAttr;
-static pthread_cond_t         Engagement_cv;
 static float                  xCorrect=60.0,yCorrect=-90.0;
 static volatile bool          isConnected=false;
 static volatile bool          isRunning = false;
 static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
-
+static THitMissComparison            Previous_Hit_Miss_Status; //hobin
+static THitMissComparison            Current_Hit_Miss_Status; //hobin
 
 #if USE_USB_WEB_CAM
 cv::VideoCapture       * capture=NULL;
 #else
 static lccv::PiCamera  * capture=NULL;
 #endif
-
 
 static Mat NoDataAvalable;
 
@@ -126,7 +132,6 @@ static void   CleanClientThread(void);
 static void   Control_C_Handler(int s);
 static void   HandleInputChar(Mat &image);
 static void * NetworkInputThread(void *data);
-static void * EngagementThread(void *data); 
 static void * DetectThread(void *data);
 static void * ClientHandlingThread(void* data);
 static int    PrintfSend(const char *fmt, ...); 
@@ -136,7 +141,11 @@ static int    SendSystemState(SystemState_t State);
 static bool   compare_float(float x, float y, float epsilon = 0.5f);
 static void   ServoAngle(int Num,float &Angle) ;
 
-static Detector *detector = nullptr;
+static Detector *detector;
+static OpenCvStrategy *openCvStrategy;
+static TfliteStrategy *tfliteStrategy;
+static float epsilon = 0.5f;
+
 static void laser(bool value);
 static void calibrate(bool value);
 static void fire(bool value);
@@ -425,7 +434,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     ServoAngle(PAN_SERVO, Pan);
                     ServoAngle(TILT_SERVO, Tilt);
 
-                    if ((compare_float(Auto->LastPan,Pan)) && (compare_float(Auto->LastTilt,Tilt)))
+                    if ((compare_float(Auto->LastPan,Pan,epsilon)) && (compare_float(Auto->LastTilt,Tilt,epsilon)))
                     {
                       Auto->StableCount++;
                     }
@@ -459,34 +468,66 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                       else if (state==TRACKING_STABLE)
                         {
-                             
                           PrintfSend("Target Tracking Stable %d",AutoEngage.Target); 
                           Auto->State=ENGAGEMENT_IN_PROGRESS;
-                          printf("Signaling Engagement\n");
-                          if ((retval = pthread_cond_signal(&Engagement_cv)) != 0) 
-                            {
-                             printf("pthread_cond_signal Error\n");
-                             exit(0);
-                            }
+
+                          //hobin - need to record previous target + number of target
+                          Previous_Hit_Miss_Status.NumberOfTartgets = detector->getNumDetected();
+                          Previous_Hit_Miss_Status.Target = item.match;
                         }
                      }
                 }    
                 break;
    case ENGAGEMENT_IN_PROGRESS:
                 {
+                  //hobin - remove Engagement Thread & merge it into ENGAGEMENT_IN_PROGRESS Switch Statement Case
+                  printf("Engagment in Progress\n");
+                  laser(true);
+                  SendSystemState(SystemState);
+                  usleep(1500 * 1000);
+
+                  fire(true);
+                  SendSystemState(SystemState);
+                  usleep(200 * 1000);
+
+                  fire(false);
+                  usleep(1500 * 1000); //hobin
+
+                  laser(false);
+                  armed(false);
+                  SendSystemState(SystemState);
+                  PrintfSend("Engaged Target %d", AutoEngage.Target);
+                  AutoEngage.State = ENGAGEMENT_COMPLETE;
                 }
                 break;      
    case ENGAGEMENT_COMPLETE:
                 {
-                 AutoEngage.CurrentIndex++;
-                 if (AutoEngage.CurrentIndex>=AutoEngage.NumberOfTartgets) 
-                   {
+                  // hobin - need to record previous target + number of target
+                  TDetected item = detector->getDetectedItem(Auto->Target);
+                  Current_Hit_Miss_Status.NumberOfTartgets = detector->getNumDetected();
+                  Current_Hit_Miss_Status.Target = item.match;
+
+                  // if the target is successfully removed
+
+                  if (Current_Hit_Miss_Status.Target == -1 && (Current_Hit_Miss_Status.NumberOfTartgets < Previous_Hit_Miss_Status.NumberOfTartgets)) {
+                    PrintfSend("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    printf("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                  } else {
+                    PrintfSend("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    printf("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                  }
+
+                  // TODO - retrial logic shall be implemented
+
+                  AutoEngage.CurrentIndex++;
+                  if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
+                  {
                     Auto->State=NOT_ACTIVE;
                     SystemState=PREARMED;
                     SendSystemState(SystemState);
                     PrintfSend("Target List Completed");
-                   }
-                 else  Auto->State=NEW_TARGET; 
+                  }
+                  else  Auto->State=NEW_TARGET;
                 }
                 break;  
     default: 
@@ -760,19 +801,10 @@ static void DrawCrosshair(Mat &img, Point correct, const Scalar &color)
 //------------------------------------------------------------------------------------------------
 int main(int argc, const char** argv)
 {
-Mat                              Frame,ResizedFrame;      // camera image in Mat format
-  float                            avfps=0.0,FPS[16]={0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0,
-                                                      0.0,0.0,0.0,0.0};
-  int                              retval,i,Fcnt = 0;
   struct sockaddr_in               cli_addr;
   socklen_t                        clilen;
-  chrono::steady_clock::time_point Tbegin, Tend;
 
   ReadOffsets();
-
-  for (i = 0; i < 16; i++) FPS[i] = 0.0;
 
   AutoEngage.State=NOT_ACTIVE;
   AutoEngage.HaveFiringOrder=false;
@@ -801,7 +833,9 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
   detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
 #elif USE_IMAGE_MATCH
 
-  detector = new Detector(new OpenCvStrategy());
+  openCvStrategy = new OpenCvStrategy();
+  tfliteStrategy = new TfliteStrategy();
+  detector = new Detector(openCvStrategy);
 
 #endif
     
@@ -858,54 +892,6 @@ Mat                              Frame,ResizedFrame;      // camera image in Mat
 // End main
 //------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
-// static void * EngagementThread
-//------------------------------------------------------------------------------------------------
-static void * EngagementThread(void *data) 
-{
-    printf("start EngagementThread()\n");
-  int ret;
-  while (isConnected) {
-    if ((ret = pthread_mutex_lock(&Engmnt_Mutex)) != 0) {
-      
-      printf("Engmnt_Mutex ERROR\n");
-      break;
-    }
-    printf("Waiting for Engagement Order\n");
-    if ((ret = pthread_cond_wait(&Engagement_cv, &Engmnt_Mutex)) != 0) {
-       printf("Engagement  pthread_cond_wait ERROR\n");
-      break;
-
-    }
-
-    printf("Engagment in Progress\n");
-    laser(true);
-    SendSystemState(SystemState);
-    //usleep(1500*1000);  
-    usleep(500*1000);  //todo: reduce the sleep time for testing
-    fire(true);
-    SendSystemState(SystemState);
-    usleep(200*1000);      
-    fire(false);
-    laser(false);
-    armed(false);
-    SendSystemState(SystemState);
-    PrintfSend("Engaged Target %d",AutoEngage.Target);
-    AutoEngage.State=ENGAGEMENT_COMPLETE;
-
-    if ((ret = pthread_mutex_unlock(&Engmnt_Mutex)) != 0) 
-    {
-        printf("Engagement pthread_cond_wait ERROR\n");
-       break;
-    }
-    usleep(100);
-  }
-
-  return NULL;
-}
-//------------------------------------------------------------------------------------------------
-// END static void * EngagementThread
-//------------------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------------------
 // static void * DetectThread
 //------------------------------------------------------------------------------------------------
 static void * DetectThread(void *data) 
@@ -913,22 +899,20 @@ static void * DetectThread(void *data)
     printf("start DetectThread()\n");
   Mat Frame;
   while (isConnected) {
-      if (!isCameraOn)
-      {
-          usleep(500 * 1000);
-          continue;
-      }
-
-    TEngagementState tmpstate=AutoEngage.State;
-    if (tmpstate!=ENGAGEMENT_IN_PROGRESS) {
-		if (!GetFrame(Frame))
-		{
-			printf("ERROR! blank frame grabbed\n");
-			continue;
-		}
-		detector->detect(Frame);
-    ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
+    if (!isCameraOn)
+    {
+      usleep(500 * 1000);
+      continue;
     }
+
+    if (!GetFrame(Frame))
+    {
+      printf("ERROR! blank frame grabbed\n");
+      continue;
+    }
+
+    if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) detector->detect(Frame);
+    ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     usleep(100);
   }
 
@@ -1039,21 +1023,19 @@ static void ProcessStateChangeRequest(SystemState_t state)
 	  enterSafe(state);
 	  break;
   case PREARMED:
-      enterPrearm(state);
+    enterPrearm(state);
 	  break;
-
   case ENGAGE_AUTO:
-      enterAutoEngage(state);
+    enterAutoEngage(state);
 	  break;
   case ARMED_MANUAL:
-      enterArmedManual(state);
+    enterArmedManual(state);
 	  break;
   default:
-             {
-              printf("UNKNOWN STATE REQUEST %d\n",state);
-             }
-              break;
-
+    {
+      printf("UNKNOWN STATE REQUEST %d\n",state);
+    }
+    break;
  }
 
  if (SystemState & LASER_ON)  laser(true);
@@ -1078,6 +1060,22 @@ static void ProcessStateChangeRequest(SystemState_t state)
 }
 //------------------------------------------------------------------------------------------------
 // END static void ProcessStateChangeRequest
+//------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
+// static void ProcessStrategyChangeRequest
+//------------------------------------------------------------------------------------------------
+static void ProcessStrategyChangeRequest(Strategy_t strategy)
+{
+  if (strategy == OPENCV) {
+    detector->setStrategy(openCvStrategy);
+    epsilon = CV_EPSILON;
+  } else if (strategy == TFLITE) {
+    detector->setStrategy(tfliteStrategy);
+    epsilon = TF_EPSILON;
+  }
+}
+//------------------------------------------------------------------------------------------------
+// END static void ProcessStrategyChangeRequest
 //------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
 // static void ProcessFiringOrder
@@ -1134,7 +1132,6 @@ static void ProcessCommands(unsigned char cmd)
       return;
     }
 
-
       switch(cmd)
         {
          case PAN_LEFT_START:
@@ -1184,20 +1181,20 @@ static void ProcessCommands(unsigned char cmd)
               SendSystemState(SystemState);
               break;
         case CMD_STOP:
-            printf("Get command to Stop\n");
-            enterPrearm(PREARMED);
-            SendSystemState(SystemState);
-            break;
+              printf("Get command to Stop\n");
+              enterPrearm(PREARMED);
+              SendSystemState(SystemState);
+              break;
         case CMD_PAUSE:
-            printf("Get command to Pause\n");
-            enterPrearm(PREARMED, false);
-            SendSystemState(SystemState);
-            break;
+              printf("Get command to Pause\n");
+              enterPrearm(PREARMED, false);
+              SendSystemState(SystemState);
+              break;
         case CMD_RESUME:
-            printf("Get command to Resume\n");
-            enterPrearm(ENGAGE_AUTO);
-            SendSystemState(SystemState);
-            break;
+              printf("Get command to Resume\n");
+              enterPrearm(ENGAGE_AUTO);
+              SendSystemState(SystemState);
+              break;
  //   case CMD_CAMERA_ON:
  //       printf("Get command to Open Camera\n");
  //       //todo: reply the result to RUI
@@ -1280,10 +1277,10 @@ static void* ClientHandlingThread(void* data) {
                                                         0.0,0.0,0.0,0.0,
                                                         0.0,0.0,0.0,0.0,
                                                         0.0,0.0,0.0,0.0 };
-    int                              retval, i, Fcnt = 0;
-    struct sockaddr_in               cli_addr;
-    socklen_t                        clilen;
+    int                              i, Fcnt = 0;
     chrono::steady_clock::time_point Tbegin, Tend;
+
+    for (i = 0; i < 16; i++) FPS[i] = 0.0;
 
     if (!OpenCamera())
     {
@@ -1297,11 +1294,6 @@ static void* ClientHandlingThread(void* data) {
     if (pthread_create(&NetworkThreadID, NULL, NetworkInputThread, NULL) != 0)
     {
         printf("Failed to Create Network Input Thread\n");
-        exit(0);
-    }
-    if (pthread_create(&EngagementThreadID, NULL, EngagementThread, NULL) != 0)
-    {
-        printf("Failed to Create ,Engagement Thread\n");
         exit(0);
     }
     if (pthread_create(&DetectThreadID, NULL, DetectThread, NULL) != 0)
@@ -1350,15 +1342,7 @@ static void* ClientHandlingThread(void* data) {
         }
         delete[] res;
 #elif USE_IMAGE_MATCH
-        TEngagementState tmpstate = AutoEngage.State;
-
-        // ZOO
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) FindTargets(Frame);
-        //  ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-        //  if (tmpstate!=ENGAGEMENT_IN_PROGRESS) DrawTargets(Frame);
-
-        ProcessTargetEngagements(&AutoEngage, Frame.cols, Frame.rows);
-        if (tmpstate != ENGAGEMENT_IN_PROGRESS) detector->draw(Frame);
+        detector->draw(Frame);
 #endif
 #define FPS_XPOS 0
 #define FPS_YPOS 20
@@ -1392,11 +1376,6 @@ static void* ClientHandlingThread(void* data) {
     } 
 
     printf("Client Thread Exiting\n");
-    //if (detector != nullptr)
-    //{
-    //    delete detector;
-    //    detector = nullptr;
-    //}
     CleanClientThread();
     return NULL;
 }
@@ -1537,21 +1516,6 @@ RestoreKeyboard();                // restore Keyboard
    else
        printf("Network Thread was not canceled\n"); 
  }
- if (EngagementThreadID!=-1)
-  {
-   //printf("Cancel Engagement Thread\n");
-   s = pthread_cancel(EngagementThreadID);
-   if (s!=0)  printf("Engagement Thread Cancel Failure\n");
- 
-   //printf("Engagement Thread Join\n"); 
-   s = pthread_join(EngagementThreadID, &res);
-   if (s != 0)   printf("Engagement  Thread Join Failure\n"); 
-
-   if (res == PTHREAD_CANCELED)
-       printf("Engagement Thread canceled\n"); 
-   else
-       printf("Engagement Thread was not canceled\n"); 
- }
  if (DetectThreadID!=-1)
   {
    //printf("Cancel Detect Thread\n");
@@ -1620,21 +1584,6 @@ static void CleanClientThread(void)
             printf("Network Thread canceled\n");
         else
             printf("Network Thread was not canceled\n");
-    }
-    if (EngagementThreadID != -1)
-    {
-        //printf("Cancel Engagement Thread\n");
-        s = pthread_cancel(EngagementThreadID);
-        if (s != 0)  printf("Engagement Thread Cancel Failure\n");
-
-        //printf("Engagement Thread Join\n"); 
-        s = pthread_join(EngagementThreadID, &res);
-        if (s != 0)   printf("Engagement  Thread Join Failure\n");
-
-        if (res == PTHREAD_CANCELED)
-            printf("Engagement Thread canceled\n");
-        else
-            printf("Engagement Thread was not canceled\n");
     }
     if (DetectThreadID != -1)
     {
