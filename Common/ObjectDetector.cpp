@@ -152,6 +152,9 @@ DetectResult* ObjectDetector::detect(Mat src) {
 		res[i].xmin = std::fmax(0.0f, detection_locations[4 * i + 1] * src.cols);
 		res[i].ymax = std::fmin(float(src.rows - 1), detection_locations[4 * i + 2] * src.rows);
 		res[i].xmax = std::fmin(float(src.cols - 1), detection_locations[4 * i + 3] * src.cols);
+
+		// printf("Label(%d), yMin(%f), yMax(%f), xMin(%f), xMax(%f)\n", res[i].label, res[i].ymin, res[i].ymax, res[i].xmin, res[i].xmax);
+		// printf("\t[SIMSON]Center(%f, %f)\n", (res[i].ymin+res[i].ymax)/2, (res[i].xmin+res[i].xmax)/2);
 	}
 
 	return res;

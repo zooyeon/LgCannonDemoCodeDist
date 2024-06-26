@@ -863,7 +863,14 @@ int main(int argc, const char** argv)
 
   openCvStrategy = new OpenCvStrategy();
   tfliteStrategy = new TfliteStrategy();
-  detector = (DefaultStrategy == OPENCV) ? new Detector(openCvStrategy) : new Detector(tfliteStrategy);
+  
+  if(DefaultStrategy == OPENCV) {
+    detector = new Detector(openCvStrategy);
+    epsilon = CV_EPSILON;
+  }else {
+    detector = new Detector(tfliteStrategy);
+    epsilon = TF_EPSILON;
+  }
 
 #endif
 
