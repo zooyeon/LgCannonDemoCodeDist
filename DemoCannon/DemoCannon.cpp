@@ -163,7 +163,7 @@ static void enterArmedManual(SystemState_t state);
 /*******************New functions*****************/
 
 static void enterSafe(SystemState_t state) {
-    printf("Enter Safe state\n");
+    printf("Enter Safe state from state %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
     laser(false);
     calibrate(false);
     fire(false);
@@ -172,15 +172,17 @@ static void enterSafe(SystemState_t state) {
     AutoEngage.HaveFiringOrder = false;
     AutoEngage.NumberOfTartgets = 0;
     isPaused = false;
-    SendCommandResponse(currentAlgorithm);
+    if(isConnected)
+        SendCommandResponse(currentAlgorithm);
 }
 
 static void enterPrearm(SystemState_t state, bool reset_needed) {
-    printf("Enter Prearm state\n");
+   
     isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO) ||
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL))
     {
+        printf("Enter PreArm state from state %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
         laser(false);
         fire(false);
         calibrate(false);
@@ -198,7 +200,7 @@ static void enterPrearm(SystemState_t state, bool reset_needed) {
 }
 
 static void enterAutoEngage(SystemState_t state) {
-    printf("Enter Auto Engage state\n");
+    printf("Enter PreArm state from %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
 
     if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED)
     {
@@ -206,7 +208,7 @@ static void enterAutoEngage(SystemState_t state) {
     }
     else if (!AutoEngage.HaveFiringOrder)
     {
-        PrintfSend("No Firing Order List");
+        PrintfSend("No Firing Order List\n");
     }
     else
     {
@@ -219,7 +221,7 @@ static void enterAutoEngage(SystemState_t state) {
 }
 
 static void enterArmedManual(SystemState_t state) {
-    printf("Enter Armed Manual state\n");
+    printf("Enter PreArm state from %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
     isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
@@ -433,7 +435,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
-                        printf("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        printf("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         enterPrearm(PREARMED, false);
                         break;
@@ -937,24 +939,27 @@ static int PrintfSend(const char *fmt, ...)
 {
     char Buffer[2048];
     int  BytesWritten;
-    int  retval;
+    int  retval = 0;
     pthread_mutex_lock(&TCP_Mutex);
     va_list args;
     va_start(args, fmt);
     BytesWritten=vsprintf(Buffer,fmt, args);
     va_end(args);
-    if (BytesWritten>0)
-      {
-       TMesssageHeader MsgHdr;
-       BytesWritten++;
-       MsgHdr.Len=htonl(BytesWritten);
-       MsgHdr.Type=htonl(MT_TEXT);
-       if (WriteDataTcp(TcpConnectedPort,(unsigned char *)&MsgHdr, sizeof(TMesssageHeader))!=sizeof(TMesssageHeader))
-           {
-            pthread_mutex_unlock(&TCP_Mutex);
-            return (-1);
-           }
-       retval=WriteDataTcp(TcpConnectedPort,(unsigned char *)Buffer,BytesWritten);
+    if (BytesWritten > 0)
+    {
+        TMesssageHeader MsgHdr;
+        BytesWritten++;
+        MsgHdr.Len = htonl(BytesWritten);
+        MsgHdr.Type = htonl(MT_TEXT);
+        if (isConnected)
+        {
+            if (WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgHdr, sizeof(TMesssageHeader)) != sizeof(TMesssageHeader))
+            {
+                pthread_mutex_unlock(&TCP_Mutex);
+                return (-1);
+            }
+            retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)Buffer, BytesWritten);
+        }
        pthread_mutex_unlock(&TCP_Mutex);
        return(retval);
       }
@@ -973,23 +978,25 @@ static int PrintfSend(const char *fmt, ...)
 static int SendSystemState(SystemState_t State)
 {
     printf("start Send Sytem state %d\n", State);
- TMesssageSystemState StateMsg;
- int                  retval;
- pthread_mutex_lock(&TCP_Mutex);
- StateMsg.State=(SystemState_t)htonl(State);
- StateMsg.Hdr.Len=htonl(sizeof(StateMsg.State));
- StateMsg.Hdr.Type=htonl(MT_STATE);
- OLED_UpdateStatus();
- retval=WriteDataTcp(TcpConnectedPort,(unsigned char *)&StateMsg,sizeof(TMesssageSystemState));
+	TMesssageSystemState StateMsg;
+	int                  retval = 0;
+	pthread_mutex_lock(&TCP_Mutex);
+	StateMsg.State = (SystemState_t)htonl(State);
+	StateMsg.Hdr.Len = htonl(sizeof(StateMsg.State));
+	StateMsg.Hdr.Type = htonl(MT_STATE);
+	OLED_UpdateStatus();
+	if (isConnected)
+	{
+		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&StateMsg, sizeof(TMesssageSystemState));
 
- if (retval == -1)
- {
-     printf("Connecton Lost %s\n", strerror(errno));
-     enterSafe(SAFE);
- }
-
- pthread_mutex_unlock(&TCP_Mutex);
- return(retval);
+		if (retval == -1)
+		{
+			printf("Connecton Lost %s\n", strerror(errno));
+			enterSafe(SAFE);
+		}
+	}
+	pthread_mutex_unlock(&TCP_Mutex);
+	return(retval);
 }
 //------------------------------------------------------------------------------------------------
 // END static int SendSystemState
@@ -998,21 +1005,23 @@ static int    SendCommandResponse(unsigned char response)
 {
     printf("start Send response %d\n", response);
     TMesssageCommands MsgCmd;
-    int                  retval;
+    int                  retval = 0;
     pthread_mutex_lock(&TCP_Mutex);
 
     int msglen = sizeof(TMesssageHeader) + sizeof(unsigned char);
     MsgCmd.Hdr.Len = htonl(sizeof(unsigned char));
     MsgCmd.Hdr.Type = htonl(MT_COMMANDS);
     MsgCmd.Commands = response;
-    retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
+	if (isConnected)
+	{
+		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
 
-    if (retval == -1)
-    {
-        printf("Connecton Lost %s\n", strerror(errno));
-        enterSafe(SAFE);
-    }
-
+		if (retval == -1)
+		{
+			printf("Connecton Lost %s\n", strerror(errno));
+			enterSafe(SAFE);
+		}
+	}
     pthread_mutex_unlock(&TCP_Mutex);
     return(retval);
 }
