@@ -53,6 +53,11 @@
 using namespace cv;
 using namespace std;
 
+typedef enum {
+  OPENCV,
+  TENSOR
+} DetectorStrategy;
+
 
 typedef enum
 {
@@ -102,11 +107,11 @@ static volatile SystemState_t SystemState= SAFE;
 static pthread_mutex_t        TCP_Mutex;
 static pthread_mutex_t        GPIO_Mutex;
 static pthread_mutex_t        I2C_Mutex;
-static pthread_mutex_t        Engmnt_Mutex;
+static pthread_mutex_t        Detect_Mutex;
 static pthread_mutexattr_t    TCP_MutexAttr;
 static pthread_mutexattr_t    GPIO_MutexAttr;
 static pthread_mutexattr_t    I2C_MutexAttr;
-static pthread_mutexattr_t    Engmnt_MutexAttr;
+static pthread_mutexattr_t    Detect_MutexAttr;
 static float                  xCorrect=60.0,yCorrect=-90.0;
 static volatile bool          isConnected=false;
 static volatile bool          isRunning = false;
@@ -117,6 +122,8 @@ static unsigned char currentAlgorithm = CMD_USE_OPENCV;
 
 static THitMissComparison            Previous_Hit_Miss_Status; //hobin
 static THitMissComparison            Current_Hit_Miss_Status; //hobin
+
+static DetectorStrategy DefaultStrategy = OPENCV;
 
 #if USE_USB_WEB_CAM
 cv::VideoCapture       * capture=NULL;
@@ -257,6 +264,8 @@ static void ReadOffsets(void)
    float x,y;
    char xs[100],ys[100];
    int retval=0;
+   char strategy[100];
+   char defaultStrategy[100];
 
    fp = fopen ("Correct.ini", "r");
    retval+=fscanf(fp, "%s %f", xs,&x);
@@ -270,6 +279,16 @@ static void ReadOffsets(void)
          printf("Read Offsets:\n");
          printf("xCorrect= %f\n",xCorrect);
          printf("yCorrect= %f\n",yCorrect);
+       }
+   }
+   retval=fscanf(fp, "%s %s", strategy, defaultStrategy);
+   if (retval==2) {
+    if (strcmp(defaultStrategy, "opencv") == 0) {
+      printf("OPENCV is selected as a default algorithm\n");
+      DefaultStrategy = OPENCV;
+    }else {
+      printf("TENSOR is selected as a default algorithm\n");
+      DefaultStrategy = TENSOR;
        }
    }
    fclose(fp);
@@ -827,13 +846,13 @@ int main(int argc, const char** argv)
   pthread_mutexattr_settype(&GPIO_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
   pthread_mutexattr_init(&I2C_MutexAttr);
   pthread_mutexattr_settype(&I2C_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
-  pthread_mutexattr_init(&Engmnt_MutexAttr);
-  pthread_mutexattr_settype(&Engmnt_MutexAttr, PTHREAD_MUTEX_ERRORCHECK);
+  pthread_mutexattr_init(&Detect_MutexAttr);
+  pthread_mutexattr_settype(&Detect_MutexAttr, PTHREAD_MUTEX_RECURSIVE);
 
   if (pthread_mutex_init(&TCP_Mutex, &TCP_MutexAttr)!=0) return -1;
   if (pthread_mutex_init(&GPIO_Mutex, &GPIO_MutexAttr)!=0) return -1;
   if (pthread_mutex_init(&I2C_Mutex, &I2C_MutexAttr)!=0) return -1;
-  if (pthread_mutex_init(&Engmnt_Mutex, &Engmnt_MutexAttr)!=0) return -1;
+  if (pthread_mutex_init(&Detect_Mutex, &Detect_MutexAttr)!=0) return -1;
 
   HaveOLED=OLEDInit();
 
@@ -846,7 +865,7 @@ int main(int argc, const char** argv)
 
   openCvStrategy = new OpenCvStrategy();
   tfliteStrategy = new TfliteStrategy();
-  detector = new Detector(openCvStrategy);
+  detector = (DefaultStrategy == OPENCV) ? new Detector(openCvStrategy) : new Detector(tfliteStrategy);
 
 #endif
 
@@ -922,7 +941,11 @@ static void * DetectThread(void *data)
       continue;
     }
 
-    if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) detector->detect(Frame);
+    if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) {
+      pthread_mutex_lock(&Detect_Mutex);
+      detector->detect(Frame);
+      pthread_mutex_unlock(&Detect_Mutex);
+    }
     ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     usleep(200);
   }
@@ -1108,6 +1131,7 @@ static void ProcessStateChangeRequest(SystemState_t state)
 //------------------------------------------------------------------------------------------------
 static void ProcessStrategyChangeRequest(unsigned char strategy)
 {
+  pthread_mutex_lock(&Detect_Mutex);
   if (strategy == CMD_USE_OPENCV) {
     detector->setStrategy(openCvStrategy);
     epsilon = CV_EPSILON;
@@ -1116,6 +1140,7 @@ static void ProcessStrategyChangeRequest(unsigned char strategy)
     epsilon = TF_EPSILON;
   }
   currentAlgorithm = strategy;
+  pthread_mutex_unlock(&Detect_Mutex);
 }
 //------------------------------------------------------------------------------------------------
 // END static void ProcessStrategyChangeRequest
