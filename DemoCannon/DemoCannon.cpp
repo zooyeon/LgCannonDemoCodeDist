@@ -159,7 +159,6 @@ static void enterSafe(SystemState_t state);
 static void enterPrearm(SystemState_t state, bool reset_needed = true);
 static void enterAutoEngage(SystemState_t state);
 static void enterArmedManual(SystemState_t state);
-static void changeAlgorithm(unsigned char algorithm_cmd);
 
 /*******************New functions*****************/
 
@@ -1232,12 +1231,12 @@ static void ProcessCommands(unsigned char cmd)
             break;
         case CMD_USE_TF:
             printf("Get command to change algorithm to use Tensorflow\n");
-            changeAlgorithm(cmd);
+            ProcessStrategyChangeRequest(cmd);
             SendCommandResponse(currentAlgorithm);
             break;
         case CMD_USE_OPENCV:
             printf("Get command to change algorithm to use OpenCV\n");
-            changeAlgorithm(cmd);
+            ProcessStrategyChangeRequest(cmd);
             SendCommandResponse(currentAlgorithm);
             break;
 
