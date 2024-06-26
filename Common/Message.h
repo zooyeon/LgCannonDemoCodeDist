@@ -24,14 +24,14 @@
 #define PAN_DOWN_STOP   0xF7
 #define FIRE_STOP       0xEF
 //New command
-#define CMD_STOP       0x11
-#define CMD_PAUSE      0x12
-#define CMD_RESUME     0x13
+#define CMD_STOP        0x11
+#define CMD_PAUSE       0x12
+#define CMD_RESUME      0x13
 
-#define CMD_CAMERA_ON       0x14
-#define CMD_CAMERA_OFF      0x15
+#define CMD_CAMERA_ON   0x14
+#define CMD_CAMERA_OFF  0x15
 #define CMD_USE_TF      0x16
-#define CMD_USE_OPENCV      0x17
+#define CMD_USE_OPENCV  0x17
 
 #define DEC_X           0x01
 #define INC_X           0x02
@@ -49,12 +49,6 @@ enum SystemState_t : unsigned int
     FIRING       = 0x20,
     LASER_ON     = 0x40,
     CALIB_ON     = 0x80 
-};
-
-enum Strategy_t : unsigned int
-{
-    OPENCV      = 0,
-    TFLITE      = 0x1
 };
 
 #define CLEAR_LASER_MASK    (~LASER_ON)
@@ -116,12 +110,6 @@ typedef struct
     TMesssageHeader Hdr;
     unsigned char  Commands;
 } TMesssageCalibCommands;
-
-typedef struct
-{
-    TMesssageHeader Hdr;
-    Strategy_t      strategy;
-} TMesssageChangeStrategyRequest;
 
 #endif
 //------------------------------------------------------------------------------------------------

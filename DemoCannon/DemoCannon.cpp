@@ -113,7 +113,7 @@ static volatile bool          isRunning = false;
 static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
 static bool isPaused = false;
-static unsigned char currentAlgorithm = CMD_USE_TF;
+static unsigned char currentAlgorithm = CMD_USE_OPENCV;
 
 static THitMissComparison            Previous_Hit_Miss_Status; //hobin
 static THitMissComparison            Current_Hit_Miss_Status; //hobin
@@ -236,20 +236,6 @@ static void enterArmedManual(SystemState_t state) {
     }
     else SystemState = state;
 }
-static void changeAlgorithm(unsigned char algorithm_cmd) {
-    //todo: change algorithm dynamically
-    if (algorithm_cmd == CMD_USE_TF)
-    {
-        //todo: change to Tenserflow
-        currentAlgorithm = algorithm_cmd;
-    } else if (algorithm_cmd == CMD_USE_OPENCV)
-    {
-        //todo: change to openCMD
-        currentAlgorithm = algorithm_cmd;
-    }
-
-}
-
 
 /*************************************** TF LITE START ********************************************************/
 #if USE_TFLITE && !USE_IMAGE_MATCH
@@ -441,10 +427,10 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   if (item.match != -1) {
                     float PanError,TiltError;
                     PanError=(item.center.x+xCorrect)-width/2;
-                    Pan=Pan-PanError/75;
+                    Pan=Pan-PanError/95;
 
                     TiltError=(item.center.y+yCorrect)-height/2;
-                    Tilt=Tilt-TiltError/75;
+                    Tilt=Tilt-TiltError/95;
 
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
@@ -1112,15 +1098,16 @@ static void ProcessStateChangeRequest(SystemState_t state)
 //------------------------------------------------------------------------------------------------
 // static void ProcessStrategyChangeRequest
 //------------------------------------------------------------------------------------------------
-static void ProcessStrategyChangeRequest(Strategy_t strategy)
+static void ProcessStrategyChangeRequest(unsigned char strategy)
 {
-  if (strategy == OPENCV) {
+  if (strategy == CMD_USE_OPENCV) {
     detector->setStrategy(openCvStrategy);
     epsilon = CV_EPSILON;
-  } else if (strategy == TFLITE) {
+  } else if (strategy == CMD_USE_TF) {
     detector->setStrategy(tfliteStrategy);
     epsilon = TF_EPSILON;
   }
+  currentAlgorithm = strategy;
 }
 //------------------------------------------------------------------------------------------------
 // END static void ProcessStrategyChangeRequest
