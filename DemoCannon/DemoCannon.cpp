@@ -148,7 +148,7 @@ static void   ServoAngle(int Num,float &Angle) ;
 static Detector *detector;
 static OpenCvStrategy *openCvStrategy;
 static TfliteStrategy *tfliteStrategy;
-static float epsilon = 0.5f;
+static float epsilon = CV_EPSILON;
 
 static void laser(bool value);
 static void calibrate(bool value);
@@ -568,7 +568,7 @@ static void CreateNoDataAvalable(void)
   putText(NoDataAvalable,Text,Point(textX , textY),cv::FONT_HERSHEY_COMPLEX,FontSize,Scalar(255,255,255),Thinkness*Thinkness,cv::LINE_AA);
   putText(NoDataAvalable,Text,Point(textX , textY),cv::FONT_HERSHEY_COMPLEX,FontSize,Scalar(0,0,0),Thinkness,cv::LINE_AA);
   printf("frame size %d %d\n", NoDataAvalable.cols,NoDataAvalable.rows);
-  usleep(100);
+  usleep(200);
 }
 //------------------------------------------------------------------------------------------------
 // END static void CreateNoDataAvalable
@@ -893,7 +893,7 @@ int main(int argc, const char** argv)
 			printf("Failed to Create Client Handling Thread\n");
 			exit(0);
 		}
-        usleep(100);
+    usleep(200);
   }
   return 0;
 }
@@ -922,7 +922,7 @@ static void * DetectThread(void *data)
 
     if (AutoEngage.State!=ENGAGEMENT_IN_PROGRESS) detector->detect(Frame);
     ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
-    usleep(100);
+    usleep(200);
   }
 
   return NULL;
@@ -1412,7 +1412,7 @@ static void* ClientHandlingThread(void* data) {
 
         if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
 
-        usleep(100);
+        usleep(200);
         Tend = chrono::steady_clock::now();
         avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
         if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;
@@ -1503,7 +1503,7 @@ static void *NetworkInputThread(void *data)
        printf("Invalid Message Type\n");
       break;
     }
-   usleep(100);
+    usleep(200);
   }
    isConnected=false;
    NetworkThreadID=-1; // Temp Fix OS probem determining if thread id are valid
