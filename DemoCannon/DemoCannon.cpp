@@ -41,7 +41,7 @@
 #define SAFE_PAN         ( 20.0f)
 
 #define TF_EPSILON      1.2
-#define CV_EPSILON      0.5
+#define CV_EPSILON      0.3
 
 #define WIDTH           1920
 #define HEIGHT          1080
@@ -1410,14 +1410,13 @@ static void* ClientHandlingThread(void* data) {
             DrawCrosshair(ResizedFrame, Point((int)xCorrect, (int)yCorrect), Scalar(0, 0, 255)); //BGR
         }
 
-
         if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
 
+        usleep(100);
         Tend = chrono::steady_clock::now();
         avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
         if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;
         for (avfps = 0.0, i = 0; i < 16; i++) { avfps += FPS[i]; }
-        usleep(100);
     }
 
     printf("Client Thread Exiting\n");
