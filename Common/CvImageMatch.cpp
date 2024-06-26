@@ -97,7 +97,89 @@ int LoadRefImages(Symbol* symbols) {
 
 }
 
+void FindTargets(const Mat& image) {
+    NumMatches = 0;
+    Mat gray;
+    cvtColor(image, gray, COLOR_BGR2GRAY);
 
+    Mat blurred;
+    GaussianBlur(gray, blurred, Size(5, 5), 0);
+
+    Mat thresholded;
+    adaptiveThreshold(blurred, thresholded, 255, ADAPTIVE_THRESH_GAUSSIAN_C, THRESH_BINARY_INV, 11, 2);
+
+    vector<vector<Point>> contours;
+    findContours(thresholded, contours, RETR_TREE, CHAIN_APPROX_SIMPLE);
+
+    for (const auto& contour : contours) {
+        vector<Point> approx;
+        approxPolyDP(contour, approx, 0.02 * arcLength(contour, true), true);
+
+        if (approx.size() >= 4 && isContourConvex(approx)) {
+            double area = contourArea(approx);
+            if (area > 400 && area < 10000) {
+                Rect boundingRect = cv::boundingRect(approx);
+                float ratio = (float)boundingRect.width / boundingRect.height;
+                if (ratio > 0.7 && ratio < 1.3) {
+                    Mat roi = thresholded(boundingRect);
+                    Mat roiResized;
+                    resize(roi, roiResized, Size(symbols[0].img.cols, symbols[0].img.rows));
+                    Mat invertedImage;
+                    bitwise_not(roiResized, invertedImage);
+                    rectangle(invertedImage, Point(0, 0), Point(symbols[0].img.cols, symbols[0].img.rows), Scalar(255, 255, 255), 50);
+                    int bestMatch = -1;
+                    double minDiff = numeric_limits<double>::infinity();
+                    double minDiffThreshold = 2000000;
+                    for (const auto& symbol : symbols) {
+                        Mat diff;
+                        absdiff(invertedImage, symbol.img, diff);
+                        double diffSum = sum(diff)[0];
+                        if (diffSum < minDiff) {
+                            minDiff = diffSum;
+                            bestMatch = stoi(symbol.name);
+                        }
+                    }
+                    if (bestMatch != -1 && minDiff < minDiffThreshold) {
+                        Moments mu = moments(contour, false);
+                        Point2f center((float)(mu.m10 / mu.m00), (float)(mu.m01 / mu.m00));
+                        bool found = false;
+                        for (int i = 0; i < NumMatches && i < MAX_DETECTED_MATCHES && !found; ++i)
+                        {
+                            double distance = norm(center - DetectedMatches[i].center);
+                            if (distance < 5.00)
+                            {
+                                if (DetectedMatches[i].Diff > minDiff)
+                                {
+                                    DetectedMatches[NumMatches].center = center;
+                                    DetectedMatches[NumMatches].Diff = minDiff;
+                                    DetectedMatches[NumMatches].match = bestMatch;
+                                    DetectedMatches[NumMatches].xmin = boundingRect.tl().x;
+                                    DetectedMatches[NumMatches].xmax = boundingRect.br().x;
+                                    DetectedMatches[NumMatches].ymin = boundingRect.tl().y;
+                                    DetectedMatches[NumMatches].ymax = boundingRect.br().y;
+                                }
+                                found = true;
+                            }
+                        }
+                        if (!found && NumMatches < MAX_DETECTED_MATCHES)
+                        {
+                            DetectedMatches[NumMatches].center = center;
+                            DetectedMatches[NumMatches].Diff = minDiff;
+                            DetectedMatches[NumMatches].match = bestMatch;
+                            DetectedMatches[NumMatches].xmin = boundingRect.tl().x;
+                            DetectedMatches[NumMatches].xmax = boundingRect.br().x;
+                            DetectedMatches[NumMatches].ymin = boundingRect.tl().y;
+                            DetectedMatches[NumMatches].ymax = boundingRect.br().y;
+                            NumMatches++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/*
 void FindTargets(const Mat& image)
 {
     Mat pyr, timg, gray0(image.size(), CV_8U), gray;
@@ -334,6 +416,7 @@ void FindTargets(const Mat& image)
     }
 
 }
+*/
 
 void DrawTargets(Mat src)
 {

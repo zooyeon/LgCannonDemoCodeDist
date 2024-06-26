@@ -49,7 +49,11 @@ enum SystemState_t : unsigned int
     CALIB_ON     = 0x80 
 };
 
-
+enum Strategy_t : unsigned int
+{
+    OPENCV      = 0,
+    TFLITE      = 0x1
+};
 
 #define CLEAR_LASER_MASK    (~LASER_ON)
 #define CLEAR_FIRING_MASK   (~FIRING)
@@ -110,6 +114,12 @@ typedef struct
     TMesssageHeader Hdr;
     unsigned char  Commands;
 } TMesssageCalibCommands;
+
+typedef struct
+{
+    TMesssageHeader Hdr;
+    Strategy_t      strategy;
+} TMesssageChangeStrategyRequest;
 
 #endif
 //------------------------------------------------------------------------------------------------
