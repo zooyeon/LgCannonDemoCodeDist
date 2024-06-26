@@ -33,12 +33,12 @@
 #define PORT            5000
 #define PAN_SERVO       1
 #define TILT_SERVO      2
-#define MIN_TILT         (-35.0f)
-#define MAX_TILT         ( 35.0f)
-#define MIN_PAN          (-85.0f)
-#define MAX_PAN          ( 85.0f)
-#define SAFE_TILT        ( 20.0f)
-#define SAFE_PAN         ( 20.0f)
+#define MIN_TILT         (-45.0f)
+#define MAX_TILT         ( 45.0f)
+#define MIN_PAN          (-60.0f)
+#define MAX_PAN          ( 60.0f)
+#define SAFE_TILT        ( 45.0f)
+#define SAFE_PAN         ( 60.0f)
 
 #define TF_EPSILON      1.2
 #define CV_EPSILON      0.3
@@ -337,19 +337,23 @@ static bool compare_float(float x, float y, float epsilon)
 //------------------------------------------------------------------------------------------------
 static void ServoAngle(int Num,float &Angle)
 {
-    printf("Number(Pan 1, tilt 2): %d - angle = %2f\n", Num, Angle);
+  printf("Number(Pan 1, tilt 2): %d - angle = %2f\n", Num, Angle);
   pthread_mutex_lock(&I2C_Mutex);
-  if (Num==TILT_SERVO)
-   {
-     if (Angle< MIN_TILT) Angle=MIN_TILT;
-     else if (Angle > MAX_TILT) Angle=MAX_TILT;
-   }
-  else if (Num==PAN_SERVO)
-   {
-    if (Angle< MIN_PAN) Angle = MIN_PAN;
-    else if (Angle > MAX_PAN) Angle=MAX_PAN;
-   }
-  Servos->angle(Num,Angle);
+  if (Num == TILT_SERVO)
+  {
+    if (Angle < MIN_TILT)
+      Angle = MIN_TILT;
+    else if (Angle > MAX_TILT)
+      Angle = MAX_TILT;
+  }
+  else if (Num == PAN_SERVO)
+  {
+    if (Angle < MIN_PAN)
+      Angle = MIN_PAN;
+    else if (Angle > MAX_PAN)
+      Angle = MAX_PAN;
+  }
+  Servos->angle(Num, Angle);
   pthread_mutex_unlock(&I2C_Mutex);
 }
 //------------------------------------------------------------------------------------------------
@@ -453,11 +457,10 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
                         printf("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, titl = %2f\n", Pan, Tilt);
                         enterPrearm(PREARMED, false);
                         break;
                     }
-
 
                     ServoAngle(PAN_SERVO, Pan);
                     ServoAngle(TILT_SERVO, Tilt);
@@ -1203,26 +1206,62 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_LEFT_START:
               RunCmds|=PAN_LEFT_START;
               RunCmds&=PAN_RIGHT_STOP;
-              Pan+=INC;
-              ServoAngle(PAN_SERVO, Pan);
+              if (Pan >= MAX_PAN)
+              {
+                Pan = MAX_PAN;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Pan += INC;
+                ServoAngle(PAN_SERVO, Pan);
+              }
               break;
          case PAN_RIGHT_START:
               RunCmds|=PAN_RIGHT_START;
               RunCmds&=PAN_LEFT_STOP;
-              Pan-=INC;
-              ServoAngle(PAN_SERVO, Pan);
+              if (Pan <= MIN_PAN)
+              {
+                Pan = MIN_PAN;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Pan -= INC;
+                ServoAngle(PAN_SERVO, Pan);
+              }
               break;
          case PAN_UP_START:
               RunCmds|=PAN_UP_START;
               RunCmds&=PAN_DOWN_STOP;
-              Tilt+=INC;
-              ServoAngle(TILT_SERVO, Tilt);
+              if (Tilt >= MAX_TILT)
+              {
+                Tilt = MAX_TILT;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Tilt += INC;
+                ServoAngle(TILT_SERVO, Tilt);
+              }
               break;
          case PAN_DOWN_START:
               RunCmds|=PAN_DOWN_START;
               RunCmds&=PAN_UP_STOP;
-              Tilt-=INC;
-              ServoAngle(TILT_SERVO, Tilt);
+              if (Tilt <= MIN_TILT)
+              {
+                Tilt = MIN_TILT;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Tilt -= INC;
+                ServoAngle(TILT_SERVO, Tilt);
+              }
               break;
          case FIRE_START:
               RunCmds|=FIRE_START;
