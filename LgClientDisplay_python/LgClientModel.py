@@ -1,10 +1,17 @@
 from PyQt5 import QtCore
-from constant.SettingConstant import NETWORK_DISCONNECTED, SYSTEM_MODE_UNKNOWN
+import numpy as np
+from constant.NetworkConfig import NETWORK_DISCONNECTED
+from constant.SettingConstant import SYSTEM_MODE_UNKNOWN
 
 class LgClientModel(QtCore.QObject):
     log_messages_signal = QtCore.pyqtSignal(list)
     connection_state_signal = QtCore.pyqtSignal(int)
     system_state_signal = QtCore.pyqtSignal(int)
+    laser_state_signal = QtCore.pyqtSignal(bool)
+    calibrate_state_signal = QtCore.pyqtSignal(bool)
+    process_image_signal = QtCore.pyqtSignal(np.ndarray)
+    algorithm_select_signal = QtCore.pyqtSignal(int)
+
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
 
     def __init__(self):
@@ -42,7 +49,7 @@ class LgClientModel(QtCore.QObject):
         self.log_messages_signal.emit(self.log_messages)
 
     def add_log_message_server(self, message):
-        self.log_messages.append(f'<span style="color:blue">{message}</span><br>')
+        self.log_messages.append(f'<span style="color:blue">[Server]{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
 
     def set_connection_state(self, connected):
@@ -64,3 +71,15 @@ class LgClientModel(QtCore.QObject):
         
     def set_text_from_server(self, text):
         self.text_from_server = text
+        
+    def set_laser_state(self, enabled):
+        self.laser_state_signal.emit(enabled)
+        
+    def set_calibrate_state(self, enabled):
+        self.calibrate_state_signal.emit(enabled)
+    
+    def set_image(self, image):
+        self.process_image_signal.emit(image)
+        
+    def set_algo(self, algo):
+        self.algorithm_select_signal.emit(algo)
