@@ -53,6 +53,11 @@
 using namespace cv;
 using namespace std;
 
+typedef enum {
+  OPENCV,
+  TENSOR
+} DetectorStrategy;
+
 
 typedef enum
 {
@@ -117,6 +122,8 @@ static unsigned char currentAlgorithm = CMD_USE_OPENCV;
 
 static THitMissComparison            Previous_Hit_Miss_Status; //hobin
 static THitMissComparison            Current_Hit_Miss_Status; //hobin
+
+static DetectorStrategy DefaultStrategy = OPENCV;
 
 #if USE_USB_WEB_CAM
 cv::VideoCapture       * capture=NULL;
@@ -255,6 +262,8 @@ static void ReadOffsets(void)
    float x,y;
    char xs[100],ys[100];
    int retval=0;
+   char strategy[100];
+   char defaultStrategy[100];
 
    fp = fopen ("Correct.ini", "r");
    retval+=fscanf(fp, "%s %f", xs,&x);
@@ -268,6 +277,16 @@ static void ReadOffsets(void)
          printf("Read Offsets:\n");
          printf("xCorrect= %f\n",xCorrect);
          printf("yCorrect= %f\n",yCorrect);
+       }
+   }
+   retval=fscanf(fp, "%s %s", strategy, defaultStrategy);
+   if (retval==2) {
+    if (strcmp(defaultStrategy, "opencv") == 0) {
+      printf("OPENCV is selected as a default algorithm\n");
+      DefaultStrategy = OPENCV;
+    }else {
+      printf("TENSOR is selected as a default algorithm\n");
+      DefaultStrategy = TENSOR;
        }
    }
    fclose(fp);
@@ -844,7 +863,7 @@ int main(int argc, const char** argv)
 
   openCvStrategy = new OpenCvStrategy();
   tfliteStrategy = new TfliteStrategy();
-  detector = new Detector(openCvStrategy);
+  detector = (DefaultStrategy == OPENCV) ? new Detector(openCvStrategy) : new Detector(tfliteStrategy);
 
 #endif
 
