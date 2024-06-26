@@ -106,6 +106,8 @@ static volatile bool          isConnected=false;
 static volatile bool          isRunning = false;
 static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
+static bool isPaused = false;
+static unsigned char currentAlgorithm = CMD_USE_TF;
 
 
 #if USE_USB_WEB_CAM
@@ -133,6 +135,7 @@ static int    PrintfSend(const char *fmt, ...);
 static bool   GetFrame( Mat &frame);
 static void   CreateNoDataAvalable(void);
 static int    SendSystemState(SystemState_t State);
+static int    SendCommandResponse(unsigned char response);
 static bool   compare_float(float x, float y, float epsilon = 0.5f);
 static void   ServoAngle(int Num,float &Angle) ;
 
@@ -146,6 +149,7 @@ static void enterSafe(SystemState_t state);
 static void enterPrearm(SystemState_t state, bool reset_needed = true);
 static void enterAutoEngage(SystemState_t state);
 static void enterArmedManual(SystemState_t state);
+static void changeAlgorithm(unsigned char algorithm_cmd);
 
 /*******************New functions*****************/
 
@@ -158,11 +162,13 @@ static void enterSafe(SystemState_t state) {
     AutoEngage.State = NOT_ACTIVE;
     AutoEngage.HaveFiringOrder = false;
     AutoEngage.NumberOfTartgets = 0;
+    isPaused = false;
+    SendCommandResponse(currentAlgorithm);
 }
 
 static void enterPrearm(SystemState_t state, bool reset_needed) {
     printf("Enter Prearm state\n");
-
+    isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO) ||
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL))
     {
@@ -205,7 +211,7 @@ static void enterAutoEngage(SystemState_t state) {
 
 static void enterArmedManual(SystemState_t state) {
     printf("Enter Armed Manual state\n");
-
+    isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
     {
@@ -220,6 +226,20 @@ static void enterArmedManual(SystemState_t state) {
     }
     else SystemState = state;
 }
+static void changeAlgorithm(unsigned char algorithm_cmd) {
+    //todo: change algorithm dynamically
+    if (algorithm_cmd == CMD_USE_TF)
+    {
+        //todo: change to Tenserflow
+        currentAlgorithm = algorithm_cmd;
+    } else if (algorithm_cmd == CMD_USE_OPENCV)
+    {
+        //todo: change to openCMD
+        currentAlgorithm = algorithm_cmd;
+    }
+
+}
+
 
 /*************************************** TF LITE START ********************************************************/ 
 #if USE_TFLITE && !USE_IMAGE_MATCH
@@ -380,7 +400,10 @@ static void laser(bool value)
 //------------------------------------------------------------------------------------------------
 static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 {
- 
+    if (isPaused)
+    {
+        return;
+    }
  bool NewState=false;
         
  switch(Auto->State)
@@ -416,7 +439,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
                         printf("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        PrintfSend("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         enterPrearm(PREARMED, false);
                         break;
                     }
@@ -1001,6 +1024,30 @@ static int SendSystemState(SystemState_t State)
 //------------------------------------------------------------------------------------------------
 // END static int SendSystemState
 //------------------------------------------------------------------------------------------------
+static int    SendCommandResponse(unsigned char response)
+{
+    printf("start Send response %d\n", response);
+    TMesssageCommands MsgCmd;
+    int                  retval;
+    pthread_mutex_lock(&TCP_Mutex);
+
+    int msglen = sizeof(TMesssageHeader) + sizeof(unsigned char);
+    MsgCmd.Hdr.Len = htonl(sizeof(unsigned char));
+    MsgCmd.Hdr.Type = htonl(MT_COMMANDS);
+    MsgCmd.Commands = response;
+    retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
+   
+    if (retval == -1)
+    {
+        printf("Connecton Lost %s\n", strerror(errno));
+        enterSafe(SAFE);
+    }
+
+    pthread_mutex_unlock(&TCP_Mutex);
+    return(retval);
+}
+
+
 //------------------------------------------------------------------------------------------------
 // static void ProcessPreArm
 //------------------------------------------------------------------------------------------------
@@ -1190,13 +1237,23 @@ static void ProcessCommands(unsigned char cmd)
             break;
         case CMD_PAUSE:
             printf("Get command to Pause\n");
-            enterPrearm(PREARMED, false);
-            SendSystemState(SystemState);
+            isPaused = true;
+            PrintfSend("Paused!");
             break;
         case CMD_RESUME:
             printf("Get command to Resume\n");
-            enterPrearm(ENGAGE_AUTO);
-            SendSystemState(SystemState);
+            isPaused = false;
+            PrintfSend("Resumed!");
+            break;
+        case CMD_USE_TF:
+            printf("Get command to change algorithm to use Tensorflow\n");
+            changeAlgorithm(cmd);
+            SendCommandResponse(currentAlgorithm);
+            break;
+        case CMD_USE_OPENCV:
+            printf("Get command to change algorithm to use OpenCV\n");
+            changeAlgorithm(cmd);
+            SendCommandResponse(currentAlgorithm);
             break;
  //   case CMD_CAMERA_ON:
  //       printf("Get command to Open Camera\n");
