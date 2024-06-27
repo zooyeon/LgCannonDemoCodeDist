@@ -27,9 +27,6 @@
 #include "Detector/OpenCvStrategy.hpp"
 #include "Detector/TfliteStrategy.hpp"
 
-//#define USE_TFLITE      1
-#define USE_IMAGE_MATCH 1
-
 #define PORT            5000
 #define PAN_SERVO       1
 #define TILT_SERVO      2
@@ -144,6 +141,7 @@ static void   HandleInputChar(Mat &image);
 static void * NetworkInputThread(void *data);
 static void * DetectThread(void *data);
 static void * ClientHandlingThread(void* data);
+static int    PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...);
 static int    PrintfSend(const char *fmt, ...);
 static bool   GetFrame( Mat &frame);
 static void   CreateNoDataAvalable(void);
@@ -243,16 +241,6 @@ static void enterArmedManual(SystemState_t state) {
     else SystemState = state;
 }
 
-/*************************************** TF LITE START ********************************************************/
-#if USE_TFLITE && !USE_IMAGE_MATCH
-static ObjectDetector *detector = nullptr;
-/*************************************** TF LITE END   ********************************************************/
-#elif USE_IMAGE_MATCH && !USE_TFLITE
-/*************************************** IMAGE_MATCH START *****************************************************/
-
-
-/*************************************** IMAGE_MATCH END *****************************************************/
-#endif
 //------------------------------------------------------------------------------------------------
 // static void ReadOffsets
 //------------------------------------------------------------------------------------------------
@@ -859,11 +847,6 @@ int main(int argc, const char** argv)
 
   printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
 
-#if USE_TFLITE
-  printf("TensorFlow Lite Mode\n");
-  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
-#elif USE_IMAGE_MATCH
-
   openCvStrategy = new OpenCvStrategy();
   tfliteStrategy = new TfliteStrategy();
   
@@ -874,8 +857,6 @@ int main(int argc, const char** argv)
     detector = new Detector(tfliteStrategy);
     epsilon = TF_EPSILON;
   }
-
-#endif
 
   OpenGPIO();
   laser(false);
@@ -943,6 +924,12 @@ static void * DetectThread(void *data)
       continue;
     }
 
+    if ((SystemState==UNKNOWN) || (SystemState==SAFE))
+    {
+      usleep(1000);
+      continue;
+    }
+
     if (!GetFrame(Frame))
     {
       printf("ERROR! blank frame grabbed\n");
@@ -962,6 +949,41 @@ static void * DetectThread(void *data)
 }
 //------------------------------------------------------------------------------------------------
 // END static void * DetectThread
+//------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
+// static int PrintfSendWithTag
+//------------------------------------------------------------------------------------------------
+static int PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...)
+{
+    char Buffer[2048];
+    int  BytesWritten;
+    int  retval;
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(Buffer,fmt, args);
+    va_end(args);
+
+    int ret = 0;
+
+    switch (lv)
+    {
+    case TITLE:
+      ret = PrintfSend("[title]%s", Buffer);
+      break;
+    case ERROR:
+      ret = PrintfSend("[error]%s", Buffer);
+      break;
+    case ALERT:
+      ret = PrintfSend("[alert]%s", Buffer);
+      break;
+    default:
+      break;
+    }
+
+    return ret;
+}
+//------------------------------------------------------------------------------------------------
+// END static int PrintfSendWithTag
 //------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
 // static int PrintfSend
@@ -1433,33 +1455,8 @@ static void* ClientHandlingThread(void* data) {
         }
 
         HandleInputChar(Frame);                           // Handle Keyboard Input
-#if USE_TFLITE
-
-        DetectResult* res = detector->detect(Frame);
-        for (i = 0; i < detector->DETECT_NUM; ++i)
-        {
-            int labelnum = res[i].label;
-            float score = res[i].score;
-            float xmin = res[i].xmin;
-            float xmax = res[i].xmax;
-            float ymin = res[i].ymin;
-            float ymax = res[i].ymax;
-            int baseline = 0;
-
-            if (score < 0.10) continue;
-
-            cv::rectangle(Frame, Point(xmin, ymin), Point(xmax, ymax), Scalar(10, 255, 0), 2);
-            cv::String label = to_string(labelnum) + ": " + to_string(int(score * 100)) + "%";
-
-            Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &baseline); // Get font size
-            int label_ymin = std::max((int)ymin, (int)(labelSize.height + 10)); // Make sure not to draw label too close to top of window
-            rectangle(Frame, Point(xmin, label_ymin - labelSize.height - 10), Point(xmin + labelSize.width, label_ymin + baseline - 10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
-            putText(Frame, label, Point(xmin, label_ymin - 7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
-        }
-        delete[] res;
-#elif USE_IMAGE_MATCH
         detector->draw(Frame);
-#endif
+
 #define FPS_XPOS 0
 #define FPS_YPOS 20
         cv::String FPS_label = format("FPS %0.2f", avfps / 16);
@@ -1483,7 +1480,7 @@ static void* ClientHandlingThread(void* data) {
 
         if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
 
-        usleep(200);
+        usleep(1000);
         Tend = chrono::steady_clock::now();
         avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
         if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;

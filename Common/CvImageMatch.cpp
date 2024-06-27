@@ -97,7 +97,7 @@ int LoadRefImages(Symbol* symbols) {
 
 }
 
-void FindTargets(const Mat& image) {
+void FindTargets(const Mat& image, double minDiffThreshold) {
     NumMatches = 0;
     Mat gray;
     cvtColor(image, gray, COLOR_BGR2GRAY);
@@ -129,7 +129,6 @@ void FindTargets(const Mat& image) {
                     rectangle(invertedImage, Point(0, 0), Point(symbols[0].img.cols, symbols[0].img.rows), Scalar(255, 255, 255), 50);
                     int bestMatch = -1;
                     double minDiff = numeric_limits<double>::infinity();
-                    double minDiffThreshold = 2000000;
                     for (const auto& symbol : symbols) {
                         Mat diff;
                         absdiff(invertedImage, symbol.img, diff);
