@@ -212,11 +212,11 @@ static void enterAutoEngage(SystemState_t state) {
 
     if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED)
     {
-        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+        PrintfSendWithTag(ALERT, "Invalid State request to Auto %d\n", SystemState);
     }
     else if (!AutoEngage.HaveFiringOrder)
     {
-        PrintfSend("No Firing Order List\n");
+        PrintfSendWithTag(ALERT, "No Firing Order List\n");
     }
     else
     {
@@ -234,7 +234,7 @@ static void enterArmedManual(SystemState_t state) {
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
     {
-        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+        PrintfSendWithTag(ALERT, "Invalid State request to Auto %d\n", SystemState);
     }
     else if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED)
     {
@@ -451,7 +451,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
                         printf("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        PrintfSendWithTag(ERR, "The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         Auto->State = NOT_ACTIVE;
                         SystemState = PREARMED;
                         SendSystemState(SystemState);
@@ -485,13 +485,13 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                         {
                           armed(false);
                           SendSystemState(SystemState);
-                          PrintfSend("Looking for Target %d",AutoEngage.Target);
+                          PrintfSendWithTag(TITLE, "Looking for Target %d",AutoEngage.Target);
                           
                           double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
                           if (elapsed > SEEK_TIME_MAX)
                           {
                               printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                              PrintfSend("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                              PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
                               Auto->State = NOT_ACTIVE;
                               SystemState = PREARMED;
                               SendSystemState(SystemState);
@@ -502,12 +502,12 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                         {
                          armed(true);
                          SendSystemState(SystemState);
-                         PrintfSend("Tracking Target Unstable %d",AutoEngage.Target);
+                         PrintfSendWithTag(TITLE, "Tracking Target Unstable %d",AutoEngage.Target);
                         }
 
                       else if (state==TRACKING_STABLE)
                         {
-                          PrintfSend("Target Tracking Stable %d",AutoEngage.Target);
+                          PrintfSendWithTag(TITLE, "Target Tracking Stable %d",AutoEngage.Target);
                           Auto->State=ENGAGEMENT_IN_PROGRESS;
 
                           //hobin - need to record previous target + number of target
@@ -535,7 +535,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   laser(false);
                   armed(false);
                   SendSystemState(SystemState);
-                  PrintfSend("Engaged Target %d", AutoEngage.Target);
+                  PrintfSendWithTag(TITLE, "Engaged Target %d", AutoEngage.Target);
                   AutoEngage.State = ENGAGEMENT_COMPLETE;
                 }
                 break;
@@ -549,10 +549,10 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   // if the target is successfully removed
 
                   if (Current_Hit_Miss_Status.Target == -1 && (Current_Hit_Miss_Status.NumberOfTartgets < Previous_Hit_Miss_Status.NumberOfTartgets)) {
-                    PrintfSend("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSendWithTag(TITLE, "Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   } else {
-                    PrintfSend("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSendWithTag(TITLE, "Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   }
 
@@ -564,7 +564,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     Auto->State=NOT_ACTIVE;
                     SystemState=PREARMED;
                     SendSystemState(SystemState);
-                    PrintfSend("Target List Completed");
+                    PrintfSendWithTag(TITLE, "Target List Completed");
                   }
                   else  Auto->State=NEW_TARGET;
                 }
@@ -990,7 +990,7 @@ static int PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...)
     case TITLE:
       ret = PrintfSend("[title]%s", Buffer);
       break;
-    case ERROR:
+    case ERR:
       ret = PrintfSend("[error]%s", Buffer);
       break;
     case ALERT:
@@ -1220,7 +1220,7 @@ static void ProcessFiringOrder(char * FiringOrder)
   else
   {
       AutoEngage.HaveFiringOrder = false;
-      PrintfSend("Empty Firing List");
+      PrintfSendWithTag(ALERT, "Empty Firing List");
       return;
   }
   AutoEngage.NumberOfTartgets = len;
@@ -1259,7 +1259,7 @@ static void ProcessCommands(unsigned char cmd)
               {
                 Pan = MAX_PAN;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1274,7 +1274,7 @@ static void ProcessCommands(unsigned char cmd)
               {
                 Pan = MIN_PAN;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1289,7 +1289,7 @@ static void ProcessCommands(unsigned char cmd)
               {
                 Tilt = MAX_TILT;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1304,7 +1304,7 @@ static void ProcessCommands(unsigned char cmd)
               {
                 Tilt = MIN_TILT;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1342,12 +1342,12 @@ static void ProcessCommands(unsigned char cmd)
         case CMD_PAUSE:
             printf("Get command to Pause\n");
             isPaused = true;
-            PrintfSend("Paused!");
+            PrintfSendWithTag(TITLE, "Paused!");
             break;
         case CMD_RESUME:
             printf("Get command to Resume\n");
             isPaused = false;
-            PrintfSend("Resumed!");
+            PrintfSendWithTag(TITLE, "Resumed!");
             SeekingStartedTime = chrono::steady_clock::now();
             break;
         case CMD_USE_TF:
@@ -1754,7 +1754,7 @@ static void CleanClientThread(void)
 static void Control_C_Handler(int s)
 {
  printf("Caught signal %d\n",s);
- PrintfSend("Robot system cotrol stoped");
+ PrintfSendWithTag(TITLE, "Robot system cotrol stoped");
  CleanUp();
  isConnected = false;
  isRunning = false;
