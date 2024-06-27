@@ -1061,15 +1061,14 @@ static int SendSystemState(SystemState_t State)
 	if (isConnected)
 	{
 		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&StateMsg, sizeof(TMesssageSystemState));
-
-		if (retval == -1)
-		{
-			printf("Connection Lost when sending the system state: %s\n", strerror(errno));
-            isConnected = false;
-			enterSafe(SAFE);
-		}
 	}
 	pthread_mutex_unlock(&TCP_Mutex);
+    if (retval == -1)
+    {
+        printf("Connection Lost when sending the system state: %s\n", strerror(errno));
+        isConnected = false;
+        enterSafe(SAFE);
+    }
 	return(retval);
 }
 //------------------------------------------------------------------------------------------------
@@ -1089,15 +1088,14 @@ static int    SendCommandResponse(unsigned char response)
 	if (isConnected)
 	{
 		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
-
-		if (retval == -1)
-		{
-			printf("Connection Lost when sending a response: %s\n", strerror(errno));
-            isConnected = false;
-			enterSafe(SAFE);
-		}
 	}
     pthread_mutex_unlock(&TCP_Mutex);
+    if (retval == -1)
+    {
+        printf("Connection Lost when sending a response: %s\n", strerror(errno));
+        isConnected = false;
+        enterSafe(SAFE);
+    }
     return(retval);
 }
 
