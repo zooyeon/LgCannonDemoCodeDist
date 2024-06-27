@@ -47,6 +47,8 @@
 
 #define USE_USB_WEB_CAM 0
 
+#define SEEK_TIME_MAX 5000
+
 using namespace cv;
 using namespace std;
 
@@ -116,6 +118,7 @@ static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
 static bool isPaused = false;
 static unsigned char currentAlgorithm = CMD_USE_OPENCV;
+static chrono::steady_clock::time_point SeekingStartedTime;
 
 static THitMissComparison            Previous_Hit_Miss_Status; //hobin
 static THitMissComparison            Current_Hit_Miss_Status; //hobin
@@ -168,7 +171,7 @@ static void enterArmedManual(SystemState_t state);
 /*******************New functions*****************/
 
 static void enterSafe(SystemState_t state) {
-    printf("Enter Safe state\n");
+    printf("Enter Safe state from state %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
     laser(false);
     calibrate(false);
     fire(false);
@@ -177,15 +180,17 @@ static void enterSafe(SystemState_t state) {
     AutoEngage.HaveFiringOrder = false;
     AutoEngage.NumberOfTartgets = 0;
     isPaused = false;
-    SendCommandResponse(currentAlgorithm);
+    if(isConnected)
+        SendCommandResponse(currentAlgorithm);
 }
 
 static void enterPrearm(SystemState_t state, bool reset_needed) {
-    printf("Enter Prearm state\n");
+   
     isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO) ||
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ARMED_MANUAL))
     {
+        printf("Enter PreArm state from state %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
         laser(false);
         fire(false);
         calibrate(false);
@@ -203,15 +208,15 @@ static void enterPrearm(SystemState_t state, bool reset_needed) {
 }
 
 static void enterAutoEngage(SystemState_t state) {
-    printf("Enter Auto Engage state\n");
+    printf("Enter PreArm state from %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
 
     if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED)
     {
-        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+        PrintfSendWithTag(ALERT, "Invalid State request to Auto %d\n", SystemState);
     }
     else if (!AutoEngage.HaveFiringOrder)
     {
-        PrintfSend("No Firing Order List");
+        PrintfSendWithTag(ALERT, "No Firing Order List\n");
     }
     else
     {
@@ -224,12 +229,12 @@ static void enterAutoEngage(SystemState_t state) {
 }
 
 static void enterArmedManual(SystemState_t state) {
-    printf("Enter Armed Manual state\n");
+    printf("Enter PreArm state from %d\n", (SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK));
     isPaused = false;
     if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED) &&
         ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ARMED_MANUAL))
     {
-        PrintfSend("Invalid State request to Auto %d\n", SystemState);
+        PrintfSendWithTag(ALERT, "Invalid State request to Auto %d\n", SystemState);
     }
     else if ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == PREARMED)
     {
@@ -426,6 +431,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    Auto->LastPan=-99999.99;
                    Auto->LastTilt=-99999.99;
                    NewState=true;
+                   SeekingStartedTime = chrono::steady_clock::now();
 
    case LOOKING_FOR_TARGET:
    case TRACKING:
@@ -444,9 +450,12 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
-                        printf("The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, titl = %2f\n", Pan, Tilt);
-                        enterPrearm(PREARMED, false);
+                        printf("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        PrintfSendWithTag(ERR, "The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
+                        Auto->State = NOT_ACTIVE;
+                        SystemState = PREARMED;
+                        SendSystemState(SystemState);
+
                         break;
                     }
 
@@ -476,18 +485,29 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                         {
                           armed(false);
                           SendSystemState(SystemState);
-                          PrintfSend("Looking for Target %d",AutoEngage.Target);
+                          PrintfSendWithTag(TITLE, "Looking for Target %d",AutoEngage.Target);
+                          
+                          double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
+                          if (elapsed > SEEK_TIME_MAX)
+                          {
+                              printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                              PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
+                              Auto->State = NOT_ACTIVE;
+                              SystemState = PREARMED;
+                              SendSystemState(SystemState);
+                          }
+
                         }
                       else if (state==TRACKING)
                         {
                          armed(true);
                          SendSystemState(SystemState);
-                         PrintfSend("Tracking Target Unstable %d",AutoEngage.Target);
+                         PrintfSendWithTag(TITLE, "Tracking Target Unstable %d",AutoEngage.Target);
                         }
 
                       else if (state==TRACKING_STABLE)
                         {
-                          PrintfSend("Target Tracking Stable %d",AutoEngage.Target);
+                          PrintfSendWithTag(TITLE, "Target Tracking Stable %d",AutoEngage.Target);
                           Auto->State=ENGAGEMENT_IN_PROGRESS;
 
                           //hobin - need to record previous target + number of target
@@ -515,7 +535,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   laser(false);
                   armed(false);
                   SendSystemState(SystemState);
-                  PrintfSend("Engaged Target %d", AutoEngage.Target);
+                  PrintfSendWithTag(TITLE, "Engaged Target %d", AutoEngage.Target);
                   AutoEngage.State = ENGAGEMENT_COMPLETE;
                 }
                 break;
@@ -529,10 +549,10 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   // if the target is successfully removed
 
                   if (Current_Hit_Miss_Status.Target == -1 && (Current_Hit_Miss_Status.NumberOfTartgets < Previous_Hit_Miss_Status.NumberOfTartgets)) {
-                    PrintfSend("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSendWithTag(TITLE, "Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   } else {
-                    PrintfSend("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSendWithTag(TITLE, "Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   }
 
@@ -544,7 +564,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     Auto->State=NOT_ACTIVE;
                     SystemState=PREARMED;
                     SendSystemState(SystemState);
-                    PrintfSend("Target List Completed");
+                    PrintfSendWithTag(TITLE, "Target List Completed");
                   }
                   else  Auto->State=NEW_TARGET;
                 }
@@ -887,7 +907,7 @@ int main(int argc, const char** argv)
 			usleep(1000 * 1000);
 			continue;
 		}
-		printf("Listening for connections\n");
+		printf("Listening for connections...\n");
 		clilen = sizeof(cli_addr);
 
 		if ((TcpConnectedPort = AcceptTcpConnection(TcpListenPort, &cli_addr, &clilen)) == NULL)
@@ -970,7 +990,7 @@ static int PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...)
     case TITLE:
       ret = PrintfSend("[title]%s", Buffer);
       break;
-    case ERROR:
+    case ERR:
       ret = PrintfSend("[error]%s", Buffer);
       break;
     case ALERT:
@@ -992,24 +1012,27 @@ static int PrintfSend(const char *fmt, ...)
 {
     char Buffer[2048];
     int  BytesWritten;
-    int  retval;
+    int  retval = 0;
     pthread_mutex_lock(&TCP_Mutex);
     va_list args;
     va_start(args, fmt);
     BytesWritten=vsprintf(Buffer,fmt, args);
     va_end(args);
-    if (BytesWritten>0)
-      {
-       TMesssageHeader MsgHdr;
-       BytesWritten++;
-       MsgHdr.Len=htonl(BytesWritten);
-       MsgHdr.Type=htonl(MT_TEXT);
-       if (WriteDataTcp(TcpConnectedPort,(unsigned char *)&MsgHdr, sizeof(TMesssageHeader))!=sizeof(TMesssageHeader))
-           {
-            pthread_mutex_unlock(&TCP_Mutex);
-            return (-1);
-           }
-       retval=WriteDataTcp(TcpConnectedPort,(unsigned char *)Buffer,BytesWritten);
+    if (BytesWritten > 0)
+    {
+        TMesssageHeader MsgHdr;
+        BytesWritten++;
+        MsgHdr.Len = htonl(BytesWritten);
+        MsgHdr.Type = htonl(MT_TEXT);
+        if (isConnected)
+        {
+            if (WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgHdr, sizeof(TMesssageHeader)) != sizeof(TMesssageHeader))
+            {
+                pthread_mutex_unlock(&TCP_Mutex);
+                return (-1);
+            }
+            retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)Buffer, BytesWritten);
+        }
        pthread_mutex_unlock(&TCP_Mutex);
        return(retval);
       }
@@ -1028,23 +1051,25 @@ static int PrintfSend(const char *fmt, ...)
 static int SendSystemState(SystemState_t State)
 {
     printf("start Send Sytem state %d\n", State);
- TMesssageSystemState StateMsg;
- int                  retval;
- pthread_mutex_lock(&TCP_Mutex);
- StateMsg.State=(SystemState_t)htonl(State);
- StateMsg.Hdr.Len=htonl(sizeof(StateMsg.State));
- StateMsg.Hdr.Type=htonl(MT_STATE);
- OLED_UpdateStatus();
- retval=WriteDataTcp(TcpConnectedPort,(unsigned char *)&StateMsg,sizeof(TMesssageSystemState));
-
- if (retval == -1)
- {
-     printf("Connecton Lost %s\n", strerror(errno));
-     enterSafe(SAFE);
- }
-
- pthread_mutex_unlock(&TCP_Mutex);
- return(retval);
+	TMesssageSystemState StateMsg;
+	int                  retval = 0;
+	pthread_mutex_lock(&TCP_Mutex);
+	StateMsg.State = (SystemState_t)htonl(State);
+	StateMsg.Hdr.Len = htonl(sizeof(StateMsg.State));
+	StateMsg.Hdr.Type = htonl(MT_STATE);
+	OLED_UpdateStatus();
+	if (isConnected)
+	{
+		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&StateMsg, sizeof(TMesssageSystemState));
+	}
+	pthread_mutex_unlock(&TCP_Mutex);
+    if (retval == -1)
+    {
+        printf("Connection Lost when sending the system state: %s\n", strerror(errno));
+        isConnected = false;
+        enterSafe(SAFE);
+    }
+	return(retval);
 }
 //------------------------------------------------------------------------------------------------
 // END static int SendSystemState
@@ -1053,22 +1078,24 @@ static int    SendCommandResponse(unsigned char response)
 {
     printf("start Send response %d\n", response);
     TMesssageCommands MsgCmd;
-    int                  retval;
+    int                  retval = 0;
     pthread_mutex_lock(&TCP_Mutex);
 
     int msglen = sizeof(TMesssageHeader) + sizeof(unsigned char);
     MsgCmd.Hdr.Len = htonl(sizeof(unsigned char));
     MsgCmd.Hdr.Type = htonl(MT_COMMANDS);
     MsgCmd.Commands = response;
-    retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
-
+	if (isConnected)
+	{
+		retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgCmd, msglen);
+	}
+    pthread_mutex_unlock(&TCP_Mutex);
     if (retval == -1)
     {
-        printf("Connecton Lost %s\n", strerror(errno));
+        printf("Connection Lost when sending a response: %s\n", strerror(errno));
+        isConnected = false;
         enterSafe(SAFE);
     }
-
-    pthread_mutex_unlock(&TCP_Mutex);
     return(retval);
 }
 
@@ -1193,7 +1220,7 @@ static void ProcessFiringOrder(char * FiringOrder)
   else
   {
       AutoEngage.HaveFiringOrder = false;
-      PrintfSend("Empty Firing List");
+      PrintfSendWithTag(ALERT, "Empty Firing List");
       return;
   }
   AutoEngage.NumberOfTartgets = len;
@@ -1228,11 +1255,11 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_LEFT_START:
               RunCmds|=PAN_LEFT_START;
               RunCmds&=PAN_RIGHT_STOP;
-              if (Pan >= MAX_PAN)
+              if (Pan + INC >= MAX_PAN)
               {
                 Pan = MAX_PAN;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1243,11 +1270,11 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_RIGHT_START:
               RunCmds|=PAN_RIGHT_START;
               RunCmds&=PAN_LEFT_STOP;
-              if (Pan <= MIN_PAN)
+              if (Pan - INC <= MIN_PAN)
               {
                 Pan = MIN_PAN;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1258,11 +1285,11 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_UP_START:
               RunCmds|=PAN_UP_START;
               RunCmds&=PAN_DOWN_STOP;
-              if (Tilt >= MAX_TILT)
+              if (Tilt + INC >= MAX_TILT)
               {
                 Tilt = MAX_TILT;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1273,11 +1300,11 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_DOWN_START:
               RunCmds|=PAN_DOWN_START;
               RunCmds&=PAN_UP_STOP;
-              if (Tilt <= MIN_TILT)
+              if (Tilt - INC <= MIN_TILT)
               {
                 Tilt = MIN_TILT;
                 printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
-                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSendWithTag(ALERT, "Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
               }
               else
               {
@@ -1315,12 +1342,13 @@ static void ProcessCommands(unsigned char cmd)
         case CMD_PAUSE:
             printf("Get command to Pause\n");
             isPaused = true;
-            PrintfSend("Paused!");
+            PrintfSendWithTag(TITLE, "Paused!");
             break;
         case CMD_RESUME:
             printf("Get command to Resume\n");
             isPaused = false;
-            PrintfSend("Resumed!");
+            PrintfSendWithTag(TITLE, "Resumed!");
+            SeekingStartedTime = chrono::steady_clock::now();
             break;
         case CMD_USE_TF:
             printf("Get command to change algorithm to use Tensorflow\n");
@@ -1502,15 +1530,17 @@ static void *NetworkInputThread(void *data)
  unsigned char Buffer[512];
  TMesssageHeader *MsgHdr;
  int fd=TcpConnectedPort->ConnectedFd,retval;
-
+ SystemState = SAFE; // go to SAFE when starting up.
  SendSystemState(SystemState);
+ SendCommandResponse(currentAlgorithm);
 
  while (1)
  {
    if ((retval=recv(fd, &Buffer, sizeof(TMesssageHeader),0)) != sizeof(TMesssageHeader))
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connecton Lost %s\n", strerror(errno));
+      else printf("Connection Lost %s\n", strerror(errno));
+      isConnected = false;
       enterSafe(SAFE);
       break;
      }
@@ -1526,7 +1556,8 @@ static void *NetworkInputThread(void *data)
    if ((retval=recv(fd, &Buffer[sizeof(TMesssageHeader)],  MsgHdr->Len,0)) !=  MsgHdr->Len)
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connecton Lost %s\n", strerror(errno));
+      else printf("Connection Lost %s\n", strerror(errno));
+      isConnected = false;
       enterSafe(SAFE);
       break;
      }
@@ -1725,7 +1756,7 @@ static void CleanClientThread(void)
 static void Control_C_Handler(int s)
 {
  printf("Caught signal %d\n",s);
- PrintfSend("Robot system cotrol stoped");
+ PrintfSendWithTag(TITLE, "Robot system cotrol stoped");
  CleanUp();
  isConnected = false;
  isRunning = false;

@@ -54,7 +54,7 @@ enum SystemState_t : unsigned int
 enum LogLevel_t : unsigned int
 {
     TITLE        = 0,
-    ERROR        = 0x1,
+    ERR          = 0x1,
     ALERT        = 0x2
 };
 
