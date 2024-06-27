@@ -907,7 +907,7 @@ int main(int argc, const char** argv)
 			usleep(1000 * 1000);
 			continue;
 		}
-		printf("Listening for connections\n");
+		printf("Listening for connections...\n");
 		clilen = sizeof(cli_addr);
 
 		if ((TcpConnectedPort = AcceptTcpConnection(TcpListenPort, &cli_addr, &clilen)) == NULL)
@@ -1064,7 +1064,8 @@ static int SendSystemState(SystemState_t State)
 
 		if (retval == -1)
 		{
-			printf("Connecton Lost %s\n", strerror(errno));
+			printf("Connection Lost when sending the system state: %s\n", strerror(errno));
+            isConnected = false;
 			enterSafe(SAFE);
 		}
 	}
@@ -1091,7 +1092,8 @@ static int    SendCommandResponse(unsigned char response)
 
 		if (retval == -1)
 		{
-			printf("Connecton Lost %s\n", strerror(errno));
+			printf("Connection Lost when sending a response: %s\n", strerror(errno));
+            isConnected = false;
 			enterSafe(SAFE);
 		}
 	}
@@ -1539,7 +1541,8 @@ static void *NetworkInputThread(void *data)
    if ((retval=recv(fd, &Buffer, sizeof(TMesssageHeader),0)) != sizeof(TMesssageHeader))
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connecton Lost %s\n", strerror(errno));
+      else printf("Connection Lost %s\n", strerror(errno));
+      isConnected = false;
       enterSafe(SAFE);
       break;
      }
@@ -1555,7 +1558,8 @@ static void *NetworkInputThread(void *data)
    if ((retval=recv(fd, &Buffer[sizeof(TMesssageHeader)],  MsgHdr->Len,0)) !=  MsgHdr->Len)
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connecton Lost %s\n", strerror(errno));
+      else printf("Connection Lost %s\n", strerror(errno));
+      isConnected = false;
       enterSafe(SAFE);
       break;
      }
