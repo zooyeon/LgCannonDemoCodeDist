@@ -442,10 +442,24 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    if (elapsed > SEEK_TIME_MAX)
                    {
                        printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                       PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
-                       Auto->State = NOT_ACTIVE;
+                       PrintfSendWithTag(TITLE, "Seeking time is timeout diff = %2lf\n", elapsed);
+                       
+                       /*Auto->State = NOT_ACTIVE;
                        SystemState = PREARMED;
-                       SendSystemState(SystemState);
+                       SendSystemState(SystemState);*/
+                       AutoEngage.CurrentIndex++;
+                       if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
+                       {
+                           Auto->State = NOT_ACTIVE;
+                           SystemState = PREARMED;
+                           SendSystemState(SystemState);
+                           PrintfSendWithTag(TITLE, "Target List Completed\n");
+                       }
+                       else {
+                           PrintfSendWithTag(TITLE, "Skip it, find the next target\n");
+                           Auto->State = NEW_TARGET;
+                       }
+
                        break;
                    }
 
