@@ -436,6 +436,16 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
    case LOOKING_FOR_TARGET:
    case TRACKING:
                 {
+                   double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
+                   if (elapsed > SEEK_TIME_MAX)
+                   {
+                       printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                       PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
+                       Auto->State = NOT_ACTIVE;
+                       SystemState = PREARMED;
+                       SendSystemState(SystemState);
+                   }
+
                   int retval;
                   TEngagementState state=LOOKING_FOR_TARGET;
                   TDetected item = detector->getDetectedItem(Auto->Target);
@@ -486,16 +496,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                           armed(false);
                           SendSystemState(SystemState);
                           PrintfSendWithTag(TITLE, "Looking for Target %d",AutoEngage.Target);
-                          
-                          double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
-                          if (elapsed > SEEK_TIME_MAX)
-                          {
-                              printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                              PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
-                              Auto->State = NOT_ACTIVE;
-                              SystemState = PREARMED;
-                              SendSystemState(SystemState);
-                          }
+                                                 
 
                         }
                       else if (state==TRACKING)
@@ -1238,6 +1239,14 @@ static void ProcessFiringOrder(char * FiringOrder)
 //------------------------------------------------------------------------------------------------
 static void ProcessCommands(unsigned char cmd)
 {
+	if (((cmd == CMD_USE_TF) || (cmd == CMD_USE_OPENCV)) && ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == SAFE))
+	{
+		printf("Get command to change algorithm in SAFE cmd=%d\n", cmd);
+		ProcessStrategyChangeRequest(cmd);
+		SendCommandResponse(currentAlgorithm);
+		return;
+	}
+
  if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=PREARMED) &&
      ((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK)!=ARMED_MANUAL))
     {
@@ -1350,17 +1359,6 @@ static void ProcessCommands(unsigned char cmd)
             PrintfSendWithTag(TITLE, "Resumed!");
             SeekingStartedTime = chrono::steady_clock::now();
             break;
-        case CMD_USE_TF:
-            printf("Get command to change algorithm to use Tensorflow\n");
-            ProcessStrategyChangeRequest(cmd);
-            SendCommandResponse(currentAlgorithm);
-            break;
-        case CMD_USE_OPENCV:
-            printf("Get command to change algorithm to use OpenCV\n");
-            ProcessStrategyChangeRequest(cmd);
-            SendCommandResponse(currentAlgorithm);
-            break;
-
  //   case CMD_CAMERA_ON:
  //       printf("Get command to Open Camera\n");
  //       //todo: reply the result to RUI
