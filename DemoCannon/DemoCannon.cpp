@@ -1531,6 +1531,11 @@ static void* ClientHandlingThread(void* data) {
         printf("Failed to Create Detect Input Thread\n");
         exit(0);
     }
+    //reset Cannon direction
+    Pan = 0;
+    Tilt = 0;
+    ServoAngle(PAN_SERVO, Pan);
+    ServoAngle(TILT_SERVO, Tilt);
 
     while (isConnected)
     {
