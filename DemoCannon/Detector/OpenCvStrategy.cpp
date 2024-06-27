@@ -16,7 +16,7 @@ OpenCvStrategy::~OpenCvStrategy() {
 };
 
 void OpenCvStrategy::detect(const cv::Mat& Frame) {
-    FindTargets(Frame);
+    FindTargets(Frame, minDiffThreshold);
 };
 
 void OpenCvStrategy::sync(TDetected (&detected)[], int &numDetected) {
@@ -31,4 +31,8 @@ void OpenCvStrategy::sync(TDetected (&detected)[], int &numDetected) {
         detected[i].ymax = DetectedMatches[i].ymax;
         detected[i].label = symbols[DetectedMatches[i].match].name;
     }
+};
+
+void OpenCvStrategy::setMinDiffThreshold(double minDiffThreshold) {
+    this->minDiffThreshold = minDiffThreshold;
 };

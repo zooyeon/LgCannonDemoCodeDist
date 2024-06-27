@@ -1,6 +1,6 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-class NumericPlainTextEdit(QtWidgets.QPlainTextEdit):
+class NumericPlainTextEdit(QtWidgets.QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         

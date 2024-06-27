@@ -51,6 +51,13 @@ enum SystemState_t : unsigned int
     CALIB_ON     = 0x80 
 };
 
+enum LogLevel_t : unsigned int
+{
+    TITLE        = 0,
+    ERROR        = 0x1,
+    ALERT        = 0x2
+};
+
 #define CLEAR_LASER_MASK    (~LASER_ON)
 #define CLEAR_FIRING_MASK   (~FIRING)
 #define CLEAR_ARMED_MASK    (~ARMED)

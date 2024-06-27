@@ -27,16 +27,13 @@
 #include "Detector/OpenCvStrategy.hpp"
 #include "Detector/TfliteStrategy.hpp"
 
-//#define USE_TFLITE      1
-#define USE_IMAGE_MATCH 1
-
 #define PORT            5000
 #define PAN_SERVO       1
 #define TILT_SERVO      2
-#define MIN_TILT         (-50.0f)
-#define MAX_TILT         ( 50.0f)
-#define MIN_PAN          (-85.0f)
-#define MAX_PAN          ( 85.0f)
+#define MIN_TILT         (-45.0f)
+#define MAX_TILT         ( 45.0f)
+#define MIN_PAN          (-60.0f)
+#define MAX_PAN          ( 60.0f)
 #define SAFE_TILT        ( 45.0f)
 #define SAFE_PAN         ( 60.0f)
 
@@ -49,6 +46,8 @@
 #define INC             0.5f
 
 #define USE_USB_WEB_CAM 0
+
+#define SEEK_TIME_MAX 5000
 
 using namespace cv;
 using namespace std;
@@ -119,6 +118,7 @@ static Servo                  *Servos=NULL;
 static bool isCameraOn = false;
 static bool isPaused = false;
 static unsigned char currentAlgorithm = CMD_USE_OPENCV;
+static chrono::steady_clock::time_point SeekingStartedTime;
 
 static THitMissComparison            Previous_Hit_Miss_Status; //hobin
 static THitMissComparison            Current_Hit_Miss_Status; //hobin
@@ -144,6 +144,7 @@ static void   HandleInputChar(Mat &image);
 static void * NetworkInputThread(void *data);
 static void * DetectThread(void *data);
 static void * ClientHandlingThread(void* data);
+static int    PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...);
 static int    PrintfSend(const char *fmt, ...);
 static bool   GetFrame( Mat &frame);
 static void   CreateNoDataAvalable(void);
@@ -245,16 +246,6 @@ static void enterArmedManual(SystemState_t state) {
     else SystemState = state;
 }
 
-/*************************************** TF LITE START ********************************************************/
-#if USE_TFLITE && !USE_IMAGE_MATCH
-static ObjectDetector *detector = nullptr;
-/*************************************** TF LITE END   ********************************************************/
-#elif USE_IMAGE_MATCH && !USE_TFLITE
-/*************************************** IMAGE_MATCH START *****************************************************/
-
-
-/*************************************** IMAGE_MATCH END *****************************************************/
-#endif
 //------------------------------------------------------------------------------------------------
 // static void ReadOffsets
 //------------------------------------------------------------------------------------------------
@@ -339,19 +330,23 @@ static bool compare_float(float x, float y, float epsilon)
 //------------------------------------------------------------------------------------------------
 static void ServoAngle(int Num,float &Angle)
 {
-    printf("Number(Pan 1, tilt 2): %d - angle = %2f\n", Num, Angle);
+  printf("Number(Pan 1, tilt 2): %d - angle = %2f\n", Num, Angle);
   pthread_mutex_lock(&I2C_Mutex);
-  if (Num==TILT_SERVO)
-   {
-     if (Angle< MIN_TILT) Angle=MIN_TILT;
-     else if (Angle > MAX_TILT) Angle=MAX_TILT;
-   }
-  else if (Num==PAN_SERVO)
-   {
-    if (Angle< MIN_PAN) Angle = MIN_PAN;
-    else if (Angle > MAX_PAN) Angle=MAX_PAN;
-   }
-  Servos->angle(Num,Angle);
+  if (Num == TILT_SERVO)
+  {
+    if (Angle < MIN_TILT)
+      Angle = MIN_TILT;
+    else if (Angle > MAX_TILT)
+      Angle = MAX_TILT;
+  }
+  else if (Num == PAN_SERVO)
+  {
+    if (Angle < MIN_PAN)
+      Angle = MIN_PAN;
+    else if (Angle > MAX_PAN)
+      Angle = MAX_PAN;
+  }
+  Servos->angle(Num, Angle);
   pthread_mutex_unlock(&I2C_Mutex);
 }
 //------------------------------------------------------------------------------------------------
@@ -436,6 +431,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    Auto->LastPan=-99999.99;
                    Auto->LastTilt=-99999.99;
                    NewState=true;
+                   SeekingStartedTime = chrono::steady_clock::now();
 
    case LOOKING_FOR_TARGET:
    case TRACKING:
@@ -456,10 +452,12 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     {
                         printf("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
                         PrintfSend("[Unsafe] The next movement is not allowed, pan = %2f, til = %2f\n", Pan, Tilt);
-                        enterPrearm(PREARMED, false);
+                        Auto->State = NOT_ACTIVE;
+                        SystemState = PREARMED;
+                        SendSystemState(SystemState);
+
                         break;
                     }
-
 
                     ServoAngle(PAN_SERVO, Pan);
                     ServoAngle(TILT_SERVO, Tilt);
@@ -488,6 +486,17 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                           armed(false);
                           SendSystemState(SystemState);
                           PrintfSend("Looking for Target %d",AutoEngage.Target);
+                          
+                          double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
+                          if (elapsed > SEEK_TIME_MAX)
+                          {
+                              printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                              PrintfSend("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                              Auto->State = NOT_ACTIVE;
+                              SystemState = PREARMED;
+                              SendSystemState(SystemState);
+                          }
+
                         }
                       else if (state==TRACKING)
                         {
@@ -858,16 +867,16 @@ int main(int argc, const char** argv)
 
   printf("OpenCV: Version %s\n", cv::getVersionString().c_str());
 
-#if USE_TFLITE
-  printf("TensorFlow Lite Mode\n");
-  detector = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
-#elif USE_IMAGE_MATCH
-
   openCvStrategy = new OpenCvStrategy();
   tfliteStrategy = new TfliteStrategy();
-  detector = (DefaultStrategy == OPENCV) ? new Detector(openCvStrategy) : new Detector(tfliteStrategy);
-
-#endif
+  
+  if(DefaultStrategy == OPENCV) {
+    detector = new Detector(openCvStrategy);
+    epsilon = CV_EPSILON;
+  }else {
+    detector = new Detector(tfliteStrategy);
+    epsilon = TF_EPSILON;
+  }
 
   OpenGPIO();
   laser(false);
@@ -935,6 +944,12 @@ static void * DetectThread(void *data)
       continue;
     }
 
+    if ((SystemState==UNKNOWN) || (SystemState==SAFE))
+    {
+      usleep(1000);
+      continue;
+    }
+
     if (!GetFrame(Frame))
     {
       printf("ERROR! blank frame grabbed\n");
@@ -954,6 +969,41 @@ static void * DetectThread(void *data)
 }
 //------------------------------------------------------------------------------------------------
 // END static void * DetectThread
+//------------------------------------------------------------------------------------------------
+//------------------------------------------------------------------------------------------------
+// static int PrintfSendWithTag
+//------------------------------------------------------------------------------------------------
+static int PrintfSendWithTag(LogLevel_t lv, const char *fmt, ...)
+{
+    char Buffer[2048];
+    int  BytesWritten;
+    int  retval;
+    va_list args;
+    va_start(args, fmt);
+    vsprintf(Buffer,fmt, args);
+    va_end(args);
+
+    int ret = 0;
+
+    switch (lv)
+    {
+    case TITLE:
+      ret = PrintfSend("[title]%s", Buffer);
+      break;
+    case ERROR:
+      ret = PrintfSend("[error]%s", Buffer);
+      break;
+    case ALERT:
+      ret = PrintfSend("[alert]%s", Buffer);
+      break;
+    default:
+      break;
+    }
+
+    return ret;
+}
+//------------------------------------------------------------------------------------------------
+// END static int PrintfSendWithTag
 //------------------------------------------------------------------------------------------------
 //------------------------------------------------------------------------------------------------
 // static int PrintfSend
@@ -1205,26 +1255,62 @@ static void ProcessCommands(unsigned char cmd)
          case PAN_LEFT_START:
               RunCmds|=PAN_LEFT_START;
               RunCmds&=PAN_RIGHT_STOP;
-              Pan+=INC;
-              ServoAngle(PAN_SERVO, Pan);
+              if (Pan + INC >= MAX_PAN)
+              {
+                Pan = MAX_PAN;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Pan += INC;
+                ServoAngle(PAN_SERVO, Pan);
+              }
               break;
          case PAN_RIGHT_START:
               RunCmds|=PAN_RIGHT_START;
               RunCmds&=PAN_LEFT_STOP;
-              Pan-=INC;
-              ServoAngle(PAN_SERVO, Pan);
+              if (Pan - INC <= MIN_PAN)
+              {
+                Pan = MIN_PAN;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Pan -= INC;
+                ServoAngle(PAN_SERVO, Pan);
+              }
               break;
          case PAN_UP_START:
               RunCmds|=PAN_UP_START;
               RunCmds&=PAN_DOWN_STOP;
-              Tilt+=INC;
-              ServoAngle(TILT_SERVO, Tilt);
+              if (Tilt + INC >= MAX_TILT)
+              {
+                Tilt = MAX_TILT;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Tilt += INC;
+                ServoAngle(TILT_SERVO, Tilt);
+              }
               break;
          case PAN_DOWN_START:
               RunCmds|=PAN_DOWN_START;
               RunCmds&=PAN_UP_STOP;
-              Tilt-=INC;
-              ServoAngle(TILT_SERVO, Tilt);
+              if (Tilt - INC <= MIN_TILT)
+              {
+                Tilt = MIN_TILT;
+                printf("Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+                PrintfSend("[Unsafe] Movement is not allowed, pan = %2f, tilt = %2f\n", Pan, Tilt);
+              }
+              else
+              {
+                Tilt -= INC;
+                ServoAngle(TILT_SERVO, Tilt);
+              }
               break;
          case FIRE_START:
               RunCmds|=FIRE_START;
@@ -1262,6 +1348,7 @@ static void ProcessCommands(unsigned char cmd)
             printf("Get command to Resume\n");
             isPaused = false;
             PrintfSend("Resumed!");
+            SeekingStartedTime = chrono::steady_clock::now();
             break;
         case CMD_USE_TF:
             printf("Get command to change algorithm to use Tensorflow\n");
@@ -1396,33 +1483,8 @@ static void* ClientHandlingThread(void* data) {
         }
 
         HandleInputChar(Frame);                           // Handle Keyboard Input
-#if USE_TFLITE
-
-        DetectResult* res = detector->detect(Frame);
-        for (i = 0; i < detector->DETECT_NUM; ++i)
-        {
-            int labelnum = res[i].label;
-            float score = res[i].score;
-            float xmin = res[i].xmin;
-            float xmax = res[i].xmax;
-            float ymin = res[i].ymin;
-            float ymax = res[i].ymax;
-            int baseline = 0;
-
-            if (score < 0.10) continue;
-
-            cv::rectangle(Frame, Point(xmin, ymin), Point(xmax, ymax), Scalar(10, 255, 0), 2);
-            cv::String label = to_string(labelnum) + ": " + to_string(int(score * 100)) + "%";
-
-            Size labelSize = cv::getTextSize(label, cv::FONT_HERSHEY_SIMPLEX, 0.7, 2, &baseline); // Get font size
-            int label_ymin = std::max((int)ymin, (int)(labelSize.height + 10)); // Make sure not to draw label too close to top of window
-            rectangle(Frame, Point(xmin, label_ymin - labelSize.height - 10), Point(xmin + labelSize.width, label_ymin + baseline - 10), Scalar(255, 255, 255), cv::FILLED); // Draw white box to put label text in
-            putText(Frame, label, Point(xmin, label_ymin - 7), cv::FONT_HERSHEY_SIMPLEX, 0.7, Scalar(0, 0, 0), 2); // Draw label text
-        }
-        delete[] res;
-#elif USE_IMAGE_MATCH
         detector->draw(Frame);
-#endif
+
 #define FPS_XPOS 0
 #define FPS_YPOS 20
         cv::String FPS_label = format("FPS %0.2f", avfps / 16);
@@ -1446,7 +1508,7 @@ static void* ClientHandlingThread(void* data) {
 
         if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
 
-        usleep(200);
+        usleep(1000);
         Tend = chrono::steady_clock::now();
         avfps = chrono::duration_cast <chrono::milliseconds> (Tend - Tbegin).count();
         if (avfps > 0.0) FPS[((Fcnt++) & 0x0F)] = 1000.0 / avfps;
@@ -1468,8 +1530,9 @@ static void *NetworkInputThread(void *data)
  unsigned char Buffer[512];
  TMesssageHeader *MsgHdr;
  int fd=TcpConnectedPort->ConnectedFd,retval;
-
+ SystemState = SAFE; // go to SAFE when starting up.
  SendSystemState(SystemState);
+ SendCommandResponse(currentAlgorithm);
 
  while (1)
  {
