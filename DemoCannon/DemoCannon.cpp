@@ -446,6 +446,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                        Auto->State = NOT_ACTIVE;
                        SystemState = PREARMED;
                        SendSystemState(SystemState);
+                       break;
                    }
 
                   int retval;
