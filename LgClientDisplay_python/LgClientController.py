@@ -5,13 +5,14 @@ from LgClientDisplay import LgClientDisplay
 import queue
 
 from TcpSendReceiver import TcpSendReceiver
-from constant.DisplayConstant import KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, \
+from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_T2_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
                                     SUB_STATE_ARMED, SUB_STATE_CALIB_OFF, SUB_STATE_CALIB_ON, SUB_STATE_FIRING, SUB_STATE_LASER_OFF, SUB_STATE_LASER_ON
 from constant.NetworkConfig import  REMOTE_PORT_NUM, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED
-from constant.SettingConstant import ARMED, CALIB_ON, FIRING, LASER_ON, PRE_ARM_CODE, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, SYSTEM_MODE_LIST, SYSTEM_MODE_PRE_ARM, \
-                                    SYSTEM_MODE_SAFE, SYSTEM_MODE_TEXT_ARMED_MANUAL, SYSTEM_MODE_TEXT_AUTO_ENGAGE, SYSTEM_MODE_TEXT_PRE_ARM, SYSTEM_MODE_TEXT_SAFE, SYSTEM_MODE_TEXT_UNKNOWN, SYSTEM_MODE_UNKNOWN, AUTO_ENGAGE_PAUSE, AUTO_ENGAGE_RESUME, AUTO_ENGAGE_STOP, DEC_X, DEC_Y, FIRE_START, \
-                                    FIRE_STOP, INC_X, INC_Y, PAN_DOWN_START, PAN_DOWN_STOP, PAN_LEFT_START, PAN_LEFT_STOP, PAN_RIGHT_START, PAN_RIGHT_STOP, \
-                                    PAN_UP_START, PAN_UP_STOP
+from constant.SettingConstant import ARMED, CALIB_ON, CMD_USE_OPENCV, CMD_USE_TF, CONFIG_ID_CV_AREA1, CONFIG_ID_CV_AREA2, CONFIG_ID_CV_THRESHOLD, CONFIG_ID_TF_DY_MV, CONFIG_ID_TF_T1, CONFIG_ID_TF_T2, FIRING, LASER_ON, PRE_ARM_CODE, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, \
+                                    SYSTEM_MODE_LIST, SYSTEM_MODE_PRE_ARM, SYSTEM_MODE_SAFE, SYSTEM_MODE_TEXT_ARMED_MANUAL, SYSTEM_MODE_TEXT_AUTO_ENGAGE, \
+                                    SYSTEM_MODE_TEXT_PRE_ARM, SYSTEM_MODE_TEXT_SAFE, SYSTEM_MODE_TEXT_UNKNOWN, SYSTEM_MODE_UNKNOWN, AUTO_ENGAGE_PAUSE, \
+                                    AUTO_ENGAGE_RESUME, AUTO_ENGAGE_STOP, DEC_X, DEC_Y, FIRE_START, FIRE_STOP, INC_X, INC_Y, PAN_DOWN_START, PAN_DOWN_STOP, \
+                                    PAN_LEFT_START, PAN_LEFT_STOP, PAN_RIGHT_START, PAN_RIGHT_STOP, PAN_UP_START, PAN_UP_STOP, TITLE_OPEN_CV, TITLE_TENSOR_FLOW
                                         
 class LgClientController(QtCore.QThread):
 
@@ -49,6 +50,15 @@ class LgClientController(QtCore.QThread):
         self.ui.checkbox_laser.stateChanged.connect(self.enqueue_set_laser)
         self.ui.checkbox_cal.stateChanged.connect(self.enqueue_set_calibrate)
         self.model.key_pressed_signal.connect(self.enqueue_set_key_event)
+        self.ui.pushButton_algo_cv.clicked.connect(self.enqueue_set_open_cv)
+        self.ui.pushButton_algo_tf.clicked.connect(self.enqueue_set_tf)
+        self.ui.config_dialog.button_set_cv_threshold.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_cv_area1.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_cv_area2.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_tf_t1.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_tf_t2.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_dy_mv_on.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_dy_mv_off.clicked.connect(self.enqueue_set_config)
         for key, button in self.ui.keys:
             button.clicked.connect(lambda checked, obj_name=button.objectName(): self.enqueue_set_click_event(obj_name))
 
@@ -68,6 +78,8 @@ class LgClientController(QtCore.QThread):
         self.model.calibrate_state_signal.connect(self.ui.update_calibrate_state)
         self.model.process_image_signal.connect(self.ui.display_image)
         self.model.algorithm_select_signal.connect(self.ui.update_algorithm)
+        self.model.robot_action_signal.connect(self.ui.update_robot_action)
+        self.model.display_alert_signal.connect(self.ui.display_alert)
 
     def run(self):
         while True:
@@ -114,6 +126,42 @@ class LgClientController(QtCore.QThread):
         
     def enqueue_set_click_event(self, object_name):
         self.event_queue.put((self.set_click_event, [object_name]))
+    
+    def enqueue_set_open_cv(self):
+        self.event_queue.put((self.set_algorithm, [CMD_USE_OPENCV]))
+
+    def enqueue_set_tf(self):
+        self.event_queue.put((self.set_algorithm, [CMD_USE_TF]))
+    
+    def enqueue_set_config(self):
+        sender = self.sender()
+        objectName = sender.objectName()
+        if objectName == BUTTON_CV_THRESHOLD_OBJECT_NAME:
+            type = CONFIG_ID_CV_THRESHOLD
+            value = self.ui.config_dialog.editText_open_cv_threshold.text()
+        elif objectName == BUTTON_CV_AREA1_OBJECT_NAME:
+            type = CONFIG_ID_CV_AREA1
+            value = self.ui.config_dialog.editText_open_cv_area1.text()
+        elif objectName == BUTTON_CV_AREA2_OBJECT_NAME:
+            type = CONFIG_ID_CV_AREA2
+            value = self.ui.config_dialog.editText_open_cv_area2.text()
+        elif objectName == BUTTON_TF_T1_OBJECT_NAME:
+            type = CONFIG_ID_TF_T1
+            value = self.ui.config_dialog.editText_tf_t1.text()
+        elif objectName == BUTTON_TF_T2_OBJECT_NAME:
+            type = CONFIG_ID_TF_T2
+            value = self.ui.config_dialog.editText_tf_t2.text()
+        elif objectName == BUTTON_TF_DY_MV_ON_OBJECT_NAME:
+            type = CONFIG_ID_TF_DY_MV
+            value = 1
+        elif objectName == BUTTON_TF_DY_MV_OFF_OBJECT_NAME:
+            type = CONFIG_ID_TF_DY_MV
+            value = 0
+            
+        if value == "":
+            return
+        
+        self.event_queue.put((self.set_config_value, [type, value]))
 
     def connect_to_server(self, connectionState):
         if connectionState == NETWORK_DISCONNECTED:
@@ -215,6 +263,10 @@ class LgClientController(QtCore.QThread):
         #Test
         # self.update_state(SYSTEM_MODE_PRE_ARM)
         
+    def set_config_value(self, type, value):
+        self.model.add_log_message_normal(f"Set {type}: {value}")
+        self.tcpSendReceive.send_config_to_server(type, value)
+    
     # Callback functions
     def update_connection(self, status):
         if status == NETWORK_CONNECTED:
@@ -239,8 +291,19 @@ class LgClientController(QtCore.QThread):
         self.handle_sub_state(currentState, state)
     
     def update_text(self, text):
-        self.model.add_log_message_server(f"{text}")
-        self.model.set_text_from_server(text)
+        if text.find(SERVER_MESSAGE_TYPE_TITLE) != -1:
+            strValue = text.replace(SERVER_MESSAGE_TYPE_TITLE, "")
+            print(f"title:{strValue}")
+            self.model.set_robot_action(strValue)
+        elif text.find(SERVER_MESSAGE_TYPE_ERROR) != -1:
+            strValue = text.replace(SERVER_MESSAGE_TYPE_ERROR, "")
+            self.model.add_log_message_server_error(strValue)
+        elif text.find(SERVER_MESSAGE_TYPE_ALERT) != -1:
+            strValue = text.replace(SERVER_MESSAGE_TYPE_ALERT, "")
+            print(f"alert:{strValue}")
+            self.model.set_alert(strValue)
+        else:
+            self.model.add_log_message_server(f"{text}")
         
     def update_image(self, image):
         self.model.process_image_signal.emit(image)
@@ -324,10 +387,18 @@ class LgClientController(QtCore.QThread):
             else:
                 if currentState&LASER_ON and subState == LASER_ON:
                     self.model.add_log_message_server(f"[Action] {SUB_STATE_LASER_OFF}")
-                    self.model.set_laser_state(False)
+                    self.model.set_laser_state(False)   
                 elif currentState&CALIB_ON and subState == CALIB_ON:
                     self.model.add_log_message_server(f"[Action] {SUB_STATE_CALIB_OFF}")
                     self.model.set_calibrate_state(False)
+        
+    def set_algorithm(self, algo):
+        if self.model.get_system_state()&SYSTEM_MODE_SAFE:
+            self.tcpSendReceive.send_command_to_server(algo)
+            if algo == CMD_USE_OPENCV:
+                self.model.add_log_message_normal(f'Set Algorithm : {TITLE_OPEN_CV}')
+            else:
+                self.model.add_log_message_normal(f'Set Algorithm : {TITLE_TENSOR_FLOW}')
     
     def extract_system_mode(self, state):
         for mode in SYSTEM_MODE_LIST:

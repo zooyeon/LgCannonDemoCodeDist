@@ -135,7 +135,7 @@ MENU_STYLE = "QMenu::item { \
                 background-color: #a8a8a8; \
               }"
               
-EDIT_TEXT_SYSTEM_STATE_STYLE = "border: none; color : rgb(0, 0, 255)"
+NON_EDIT_TEXT_SYSTEM_STATE_STYLE = "border: none; color : rgb(0, 0, 255)"
 
 EDIT_TEXT_BORDER_NON_STYLE = "border: none; background-color : white;"
 

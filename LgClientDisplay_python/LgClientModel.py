@@ -11,6 +11,8 @@ class LgClientModel(QtCore.QObject):
     calibrate_state_signal = QtCore.pyqtSignal(bool)
     process_image_signal = QtCore.pyqtSignal(np.ndarray)
     algorithm_select_signal = QtCore.pyqtSignal(int)
+    robot_action_signal = QtCore.pyqtSignal(str)
+    display_alert_signal = QtCore.pyqtSignal(str)
 
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
 
@@ -21,7 +23,6 @@ class LgClientModel(QtCore.QObject):
         self.target_order = ""
         self.system_state = SYSTEM_MODE_UNKNOWN
         self.log_messages = []
-        self.text_from_server = ""
         self.connectionState = NETWORK_DISCONNECTED
 
     def set_remote_address(self, address):
@@ -51,6 +52,10 @@ class LgClientModel(QtCore.QObject):
     def add_log_message_server(self, message):
         self.log_messages.append(f'<span style="color:blue">[Server]{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
+        
+    def add_log_message_server_error(self, message):
+        self.log_messages.append(f'<span style="color:red">[Server]{message}</span><br>')
+        self.log_messages_signal.emit(self.log_messages)
 
     def set_connection_state(self, connected):
         self.connectionState = connected
@@ -69,9 +74,6 @@ class LgClientModel(QtCore.QObject):
     def set_target_order(self, target):
         self.target_order = target
         
-    def set_text_from_server(self, text):
-        self.text_from_server = text
-        
     def set_laser_state(self, enabled):
         self.laser_state_signal.emit(enabled)
         
@@ -83,3 +85,9 @@ class LgClientModel(QtCore.QObject):
         
     def set_algo(self, algo):
         self.algorithm_select_signal.emit(algo)
+        
+    def set_robot_action(self, action):
+        self.robot_action_signal.emit(action)
+    
+    def set_alert(self, alert):
+        self.display_alert_signal.emit(alert)
