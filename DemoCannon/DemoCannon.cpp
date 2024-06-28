@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/select.h>
+#include <string>
 #include "NetworkTCP.h"
 #include "TcpSendRecvJpeg.h"
 #include "Message.h"
@@ -167,6 +168,7 @@ static void enterSafe(SystemState_t state);
 static void enterPrearm(SystemState_t state, bool reset_needed = true);
 static void enterAutoEngage(SystemState_t state);
 static void enterArmedManual(SystemState_t state);
+static void processConfigString(char* data);
 
 /*******************New functions*****************/
 
@@ -440,10 +442,25 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    if (elapsed > SEEK_TIME_MAX)
                    {
                        printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                       PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
-                       Auto->State = NOT_ACTIVE;
+                       PrintfSendWithTag(TITLE, "Seeking time is timeout diff = %2lf\n", elapsed);
+                       
+                       /*Auto->State = NOT_ACTIVE;
                        SystemState = PREARMED;
-                       SendSystemState(SystemState);
+                       SendSystemState(SystemState);*/
+                       AutoEngage.CurrentIndex++;
+                       if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
+                       {
+                           Auto->State = NOT_ACTIVE;
+                           SystemState = PREARMED;
+                           SendSystemState(SystemState);
+                           PrintfSendWithTag(TITLE, "Target List Completed\n");
+                       }
+                       else {
+                           PrintfSendWithTag(TITLE, "Skip it, find the next target\n");
+                           Auto->State = NEW_TARGET;
+                       }
+
+                       break;
                    }
 
                   int retval;
@@ -1030,11 +1047,22 @@ static int PrintfSend(const char *fmt, ...)
             if (WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgHdr, sizeof(TMesssageHeader)) != sizeof(TMesssageHeader))
             {
                 pthread_mutex_unlock(&TCP_Mutex);
+                printf("Connection Lost when sending data header: %s\n", strerror(errno));
+                isConnected = false;
+                enterSafe(SAFE);
                 return (-1);
             }
             retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)Buffer, BytesWritten);
         }
        pthread_mutex_unlock(&TCP_Mutex);
+
+       if (retval < BytesWritten)
+       {
+           printf("Connection Lost when sending data: %s\n", strerror(errno));
+           isConnected = false;
+           enterSafe(SAFE);
+       }
+
        return(retval);
       }
     else
@@ -1234,6 +1262,69 @@ static void ProcessFiringOrder(char * FiringOrder)
 //------------------------------------------------------------------------------------------------
 // END static void ProcessFiringOrder
 //------------------------------------------------------------------------------------------------
+ 
+static void processConfigString(char* data)
+{
+    if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED))
+    {
+        printf("received Config request outside of Pre-Arm\n");
+        return;
+    }
+	/*format: id:value
+	1) CV_THRESHOLD
+	2) TF_THRESHOLD1
+	3) TF_THRESHOLD2
+	4) TF_DY_MV */
+	if (strlen(data) > 50)
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+		return;
+	}
+	std::string config_string(data);
+	std::string delimiter = ":";
+	size_t pos = 0;
+	std::string id;
+	int value = -1;
+	pos = config_string.find(delimiter);
+	if (pos == std::string::npos)
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+		return;
+	}
+
+	id = config_string.substr(0, pos);
+	config_string.erase(0, pos + delimiter.length());
+	if (config_string.length() > 0)
+	{
+		value = stoi(config_string);
+	}
+	printf("id = %s, value = %d", id, value);
+	if (id.compare("CV_THRESHOLD") == 0)
+	{
+		//todo
+	}
+	else if (id.compare("TF_THRESHOLD1") == 0)
+	{
+		//todo
+	}
+	else if (id.compare("TF_THRESHOLD2") == 0)
+	{
+		//todo
+	}
+	else if (id.compare("TF_DY_MV") == 0)
+	{
+		//todo
+	}
+	else
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+	}
+}
+ 
+// 
 //------------------------------------------------------------------------------------------------
 // static void ProcessCommands
 //------------------------------------------------------------------------------------------------
@@ -1465,6 +1556,11 @@ static void* ClientHandlingThread(void* data) {
         printf("Failed to Create Detect Input Thread\n");
         exit(0);
     }
+    //reset Cannon direction
+    Pan = 0;
+    Tilt = 0;
+    ServoAngle(PAN_SERVO, Pan);
+    ServoAngle(TILT_SERVO, Tilt);
 
     while (isConnected)
     {
@@ -1593,6 +1689,12 @@ static void *NetworkInputThread(void *data)
        msgChangeStateRequest->State=(SystemState_t)ntohl(msgChangeStateRequest->State);
 
        ProcessStateChangeRequest(msgChangeStateRequest->State);
+      }
+      break;
+      case MT_CONFIG:
+      {
+          TMesssageConfigString* msgConfigString = (TMesssageConfigString*)Buffer;
+          processConfigString(msgConfigString->data);
       }
       break;
 
