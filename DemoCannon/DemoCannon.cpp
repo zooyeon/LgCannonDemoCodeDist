@@ -39,7 +39,7 @@
 #define SAFE_PAN         ( 60.0f)
 
 #define TF_EPSILON      1.2
-#define CV_EPSILON      0.3
+#define CV_EPSILON      0.5
 
 #define WIDTH           1920
 #define HEIGHT          1080

@@ -17,7 +17,6 @@ Detector::Detector(DetectStrategy *strategy){
 };
 
 Detector::~Detector() {
-    delete this->strategy;
 };
 
 void Detector::detect(const cv::Mat& Frame) {
@@ -70,7 +69,6 @@ int Detector::getNumDetected() {
 
 void Detector::setStrategy(DetectStrategy *strategy) {
     pthread_mutex_lock(&Mutex);
-    delete this->strategy;
     this->strategy = strategy;
     pthread_mutex_unlock(&Mutex);
 }
