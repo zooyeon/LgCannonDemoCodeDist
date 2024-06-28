@@ -947,10 +947,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         if self.pushButton_auto_start.isChecked():
             target_order_text = self.editText_target_order.text()
             if target_order_text == "":
-                self.pushButton_auto_start.setIcon(self.play_pause_icon)
                 self.pushButton_auto_start.setChecked(False)
-            else:
-                self.pushButton_auto_start.setIcon(self.pause_icon)
+                return
+            self.pushButton_auto_start.setIcon(self.pause_icon)
         else:
             self.pushButton_auto_start.setIcon(self.play_pause_icon)
             

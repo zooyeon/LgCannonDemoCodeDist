@@ -1,7 +1,7 @@
 from PyQt5 import QtWidgets, QtCore
 
-from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_OFF, BUTTON_ON, BUTTON_SET, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_T2_OBJECT_NAME, DIALOG_TITLE, GROUP_BOX_OPEN_CV, GROUP_BOX_TENSOR_FLOW, LABLE_OPEN_CV_AREA1, LABLE_OPEN_CV_AREA2, LABLE_OPEN_CV_THRESHOLD, LABLE_TENSOR_FLOW_DYNAMIC, LABLE_TENSOR_FLOW_T1, \
-                                        LABLE_TENSOR_FLOW_T2
+from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_OFF, BUTTON_ON, BUTTON_SET, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, DIALOG_TITLE, GROUP_BOX_OPEN_CV, GROUP_BOX_TENSOR_FLOW, LABLE_OPEN_CV_AREA1, LABLE_OPEN_CV_AREA2, LABLE_OPEN_CV_THRESHOLD, LABLE_TENSOR_FLOW_DYNAMIC, LABLE_TENSOR_FLOW_SCORE, \
+                                        LABLE_TENSOR_FLOW_BOX
 from constant.StyleSheet import BUTTON_DISABLED_STYLE, BUTTON_SELECTED_STYLE, BUTTON_STYLE
 
 class ConfigDialog(QtWidgets.QDialog):
@@ -62,33 +62,33 @@ class ConfigDialog(QtWidgets.QDialog):
         self.groupBox_tf = QtWidgets.QGroupBox(GROUP_BOX_TENSOR_FLOW, self)
         self.groupBox_tf_layout = QtWidgets.QVBoxLayout(self.groupBox_tf)
         
-        # Threshold1
-        self.tf_t1_layout = QtWidgets.QHBoxLayout()
-        self.label_tf_t1 = QtWidgets.QLabel(LABLE_TENSOR_FLOW_T1, self.groupBox_tf)
-        self.tf_t1_layout.addWidget(self.label_tf_t1)
+        # Score
+        self.tf_score_layout = QtWidgets.QHBoxLayout()
+        self.label_tf_score = QtWidgets.QLabel(LABLE_TENSOR_FLOW_SCORE, self.groupBox_tf)
+        self.tf_score_layout.addWidget(self.label_tf_score)
         
-        self.editText_tf_t1 = QtWidgets.QLineEdit(self.groupBox_tf)
-        self.tf_t1_layout.addWidget(self.editText_tf_t1)
+        self.editText_tf_score = QtWidgets.QLineEdit(self.groupBox_tf)
+        self.tf_score_layout.addWidget(self.editText_tf_score)
         
-        self.button_set_tf_t1 = QtWidgets.QPushButton(BUTTON_SET, self.groupBox_tf)
-        self.button_set_tf_t1.setObjectName(BUTTON_TF_T1_OBJECT_NAME)
-        self.tf_t1_layout.addWidget(self.button_set_tf_t1)
+        self.button_set_tf_score = QtWidgets.QPushButton(BUTTON_SET, self.groupBox_tf)
+        self.button_set_tf_score.setObjectName(BUTTON_TF_T1_OBJECT_NAME)
+        self.tf_score_layout.addWidget(self.button_set_tf_score)
         
-        self.groupBox_tf_layout.addLayout(self.tf_t1_layout)
+        self.groupBox_tf_layout.addLayout(self.tf_score_layout)
         
-        # Threshold2
-        self.tf_t2_layout = QtWidgets.QHBoxLayout()
-        self.label_tf_t2 = QtWidgets.QLabel(LABLE_TENSOR_FLOW_T2, self.groupBox_tf)
-        self.tf_t2_layout.addWidget(self.label_tf_t2)
+        # Box
+        self.tf_box_layout = QtWidgets.QHBoxLayout()
+        self.label_tf_box = QtWidgets.QLabel(LABLE_TENSOR_FLOW_BOX, self.groupBox_tf)
+        self.tf_box_layout.addWidget(self.label_tf_box)
         
-        self.editText_tf_t2 = QtWidgets.QLineEdit(self.groupBox_tf)
-        self.tf_t2_layout.addWidget(self.editText_tf_t2)
+        self.editText_tf_box = QtWidgets.QLineEdit(self.groupBox_tf)
+        self.tf_box_layout.addWidget(self.editText_tf_box)
         
-        self.button_set_tf_t2 = QtWidgets.QPushButton(BUTTON_SET, self.groupBox_tf)
-        self.button_set_tf_t2.setObjectName(BUTTON_TF_T2_OBJECT_NAME)
-        self.tf_t2_layout.addWidget(self.button_set_tf_t2)
+        self.button_set_tf_box = QtWidgets.QPushButton(BUTTON_SET, self.groupBox_tf)
+        self.button_set_tf_box.setObjectName(BUTTON_TF_BOX_OBJECT_NAME)
+        self.tf_box_layout.addWidget(self.button_set_tf_box)
         
-        self.groupBox_tf_layout.addLayout(self.tf_t2_layout)
+        self.groupBox_tf_layout.addLayout(self.tf_box_layout)
         
         # Dynamic Move
         self.tf_dy_mv_layout = QtWidgets.QHBoxLayout()

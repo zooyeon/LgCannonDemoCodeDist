@@ -5,7 +5,7 @@ from LgClientDisplay import LgClientDisplay
 import queue
 
 from TcpSendReceiver import TcpSendReceiver
-from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_T2_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
+from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
                                     SUB_STATE_ARMED, SUB_STATE_CALIB_OFF, SUB_STATE_CALIB_ON, SUB_STATE_FIRING, SUB_STATE_LASER_OFF, SUB_STATE_LASER_ON
 from constant.NetworkConfig import  REMOTE_PORT_NUM, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED
 from constant.SettingConstant import ARMED, CALIB_ON, CMD_USE_OPENCV, CMD_USE_TF, CONFIG_ID_CV_AREA1, CONFIG_ID_CV_AREA2, CONFIG_ID_CV_THRESHOLD, CONFIG_ID_TF_DY_MV, CONFIG_ID_TF_T1, CONFIG_ID_TF_T2, FIRING, LASER_ON, PRE_ARM_CODE, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, \
@@ -55,8 +55,8 @@ class LgClientController(QtCore.QThread):
         self.ui.config_dialog.button_set_cv_threshold.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_cv_area1.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_cv_area2.clicked.connect(self.enqueue_set_config)
-        self.ui.config_dialog.button_set_tf_t1.clicked.connect(self.enqueue_set_config)
-        self.ui.config_dialog.button_set_tf_t2.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_tf_score.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_tf_box.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_on.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_off.clicked.connect(self.enqueue_set_config)
         for key, button in self.ui.keys:
@@ -147,10 +147,10 @@ class LgClientController(QtCore.QThread):
             value = self.ui.config_dialog.editText_open_cv_area2.text()
         elif objectName == BUTTON_TF_T1_OBJECT_NAME:
             type = CONFIG_ID_TF_T1
-            value = self.ui.config_dialog.editText_tf_t1.text()
-        elif objectName == BUTTON_TF_T2_OBJECT_NAME:
+            value = self.ui.config_dialog.editText_tf_score.text()
+        elif objectName == BUTTON_TF_BOX_OBJECT_NAME:
             type = CONFIG_ID_TF_T2
-            value = self.ui.config_dialog.editText_tf_t2.text()
+            value = self.ui.config_dialog.editText_tf_box.text()
         elif objectName == BUTTON_TF_DY_MV_ON_OBJECT_NAME:
             type = CONFIG_ID_TF_DY_MV
             value = 1
