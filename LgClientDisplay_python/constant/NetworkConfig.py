@@ -7,6 +7,9 @@ MT_PREARM = 5
 MT_STATE_CHANGE_REQ = 7
 MT_CALIB_COMMANDS = 8
 
+# Custom
+MT_CONFIG = 100
+
 # Receive Type
 MT_IMAGE = 3
 MT_TEXT = 4

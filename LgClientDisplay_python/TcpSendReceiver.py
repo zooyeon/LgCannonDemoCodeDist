@@ -42,12 +42,6 @@ class TcpSendReceiver:
         if self.client_socket:
             self.client_socket.close()
             self.client_socket = None
-        try:
-            self.recv_thread.join()
-        except RuntimeError as e:
-            print(f"Error joining thread: {e}")
-        except Exception as e:
-            print(f"Unexpected error joining thread: {e}")
         if self.connection_callback:
             self.connection_callback(Network.NETWORK_DISCONNECTED)
         if self.state_callback:
@@ -55,6 +49,13 @@ class TcpSendReceiver:
         self.image_callback = None
         self.text_callback = None
         self.state_callback = None
+        if self.recv_thread is not None:
+            try:
+                self.recv_thread.join()
+            except RuntimeError as e:
+                print(f"Error joining thread: {e}")
+            except Exception as e:
+                print(f"Unexpected error joining thread: {e}")
 
     def send_message(self, msg_type, msg_data):
         if not self.connected:
@@ -102,7 +103,6 @@ class TcpSendReceiver:
                     self.process_text(msg_data)
                 elif msg_type == Network.MT_COMMANDS:
                     self.process_command(msg_data)
-                    print(msg_data)
 
             except socket.error as e:
                 self.disconnect()
@@ -151,18 +151,28 @@ class TcpSendReceiver:
             return True
         return False
 
-    def send_calib_to_server(client, code):
-        if client.is_connected():
+    def send_calib_to_server(self, code):
+        if self.is_connected():
             msg_type = Network.MT_CALIB_COMMANDS
             msg_data = struct.pack('B', code)
-            client.send_message(msg_type, msg_data)
+            self.send_message(msg_type, msg_data)
             return True
         return False
 
-    def send_target_order_to_server(client, target_order):
-        if client.is_connected():
+    def send_target_order_to_server(self, target_order):
+        if self.is_connected():
             msg_type = Network.MT_TARGET_SEQUENCE
             msg_data = target_order.encode() + b'\0'
-            client.send_message(msg_type, msg_data)
+            self.send_message(msg_type, msg_data)
+            return True
+        return False
+    
+    def send_config_to_server(self, type, value):
+        if self.is_connected():
+            msg_type = Network.MT_CONFIG
+            strValue = f"{type}:{value}"
+            print(strValue)
+            msg_data = strValue.encode('ascii') + b'\0'
+            self.send_message(msg_type, msg_data)
             return True
         return False

@@ -4,6 +4,7 @@ import sys
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QMovie, QImage, QPixmap
 
+from ConfigDialog import ConfigDialog
 from LgClientModel import LgClientModel
 from NumericPlainTextEdit import NumericPlainTextEdit
 import constant.DisplayConstant as Display
@@ -11,6 +12,8 @@ import constant.SettingConstant as Setting
 import constant.NetworkConfig as Network
 import constant.StyleSheet as Style
 import keyboard
+
+messageBox = None
 
 class LgClientDisplay(QtWidgets.QMainWindow):
     def __init__(self, model):
@@ -84,6 +87,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.setupMenuBar(LgClientDisplay)
         self.setupStatusBar(LgClientDisplay)
         
+        self.config_dialog = ConfigDialog(self)
+        
         self.centralwidget = QtWidgets.QWidget(LgClientDisplay)
         self.centralwidget.setObjectName(Display.CENTRAL_OBJECT_NAME)
 
@@ -125,10 +130,16 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.leftLayout.addWidget(self.groupBox_command_panel)
         self.leftLayout.addWidget(self.nonEditText_log)
 
-        self.rightLayout = QtWidgets.QVBoxLayout()
         self.setupAlgoSelectionPanel()
         self.setupCameraVideoPanel()
-        self.rightLayout.addWidget(self.groupBox_algo)
+        
+        self.algoLayout = QtWidgets.QHBoxLayout()
+        self.algoLayout.setAlignment(QtCore.Qt.AlignLeft)
+        self.algoLayout.addWidget(self.groupBox_algo)
+        self.algoLayout.addWidget(self.groupBox_robot_action)
+        
+        self.rightLayout = QtWidgets.QVBoxLayout()
+        self.rightLayout.addLayout(self.algoLayout)
         self.rightLayout.addWidget(self.groupBox_camera_video)
 
         self.horizontalLayout = QtWidgets.QHBoxLayout()
@@ -160,17 +171,22 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.actionExit = QtWidgets.QAction(Display.ACTION_EXIT, self.menubar)
         self.actionExit.setFont(self.getRegularFont())
         self.actionExit.setMenuRole(QtWidgets.QAction.QuitRole)
-        self.actionExit.setObjectName(Display.ACTION_EXIT_OBJECT_NAME)
         self.actionExit.triggered.connect(self.close)
 
         self.actionAbout = QtWidgets.QAction(Display.ACTION_ABOUT, self.menubar)
         self.actionAbout.setFont(self.getRegularFont())
         self.actionAbout.setMenuRole(QtWidgets.QAction.AboutRole)
-        self.actionAbout.setObjectName(Display.ACTION_ABOUT_OBJECT_NAME)
         self.actionAbout.triggered.connect(self.pop_up_action_about)
+        
+        self.actionConfig = QtWidgets.QAction(Display.ACTION_CONFIG, self.menubar)
+        self.actionConfig.setFont(self.getRegularFont())
+        self.actionConfig.setMenuRole(QtWidgets.QAction.NoRole)
+        self.actionConfig.triggered.connect(self.pop_up_action_config)
+        self.actionConfig.setEnabled(False)
 
         self.menuFile.addAction(self.actionExit)
         self.menuHelp.addAction(self.actionAbout)
+        self.menuHelp.addAction(self.actionConfig)
 
     def setupStatusBar(self, LgClientDisplay):
         self.statusbar = QtWidgets.QStatusBar(LgClientDisplay)
@@ -191,7 +207,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
                                                                Display.NON_EDIT_TEXT_WIDHT, 
                                                                Display.NON_EDIT_TEXT_HEIGHT))
         self.nonEditText_system_state.setFont(self.getBoldFont(15))
-        self.nonEditText_system_state.setStyleSheet(Style.EDIT_TEXT_SYSTEM_STATE_STYLE)
+        self.nonEditText_system_state.setStyleSheet(Style.NON_EDIT_TEXT_SYSTEM_STATE_STYLE)
         self.nonEditText_system_state.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.nonEditText_system_state.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.nonEditText_system_state.setReadOnly(True)
@@ -539,34 +555,71 @@ class LgClientDisplay(QtWidgets.QMainWindow):
     def setupAlgoSelectionPanel(self):
         self.groupBox_algo = QtWidgets.QGroupBox()
         self.groupBox_algo.setEnabled(False)
-        self.groupBox_algo.setSizePolicy(self.getFixedSizePolicy())
+        self.groupBox_algo.setMaximumWidth(Display.GROUPBOX_ALGORITHM_WIDTH)
+        self.groupBox_algo.setMaximumHeight(Display.GROUPBOX_ALGORITHM_HEIGHT)
+        self.groupBox_algo.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         self.groupBox_algo.setFont(self.getBoldFont(13))
-        self.groupBox_algo.setAlignment(QtCore.Qt.AlignCenter)
         self.groupBox_algo.setObjectName(Display.GROUPBOX_ALGORITHM_OBJECT_NAME)
-        self.groupBox_algo.setStyleSheet(self.getPanelStyle())
+        self.groupBox_algo.setStyleSheet(self.getDisabledPanelStyle())
         
-        # self.pushButton_armed_manual = QtWidgets.QPushButton(self.groupBox_arm_mode)
-        # self.pushButton_armed_manual.setGeometry(QtCore.QRect(Display.BUTTON_ARMED_MANUAL_LEFT, 
-        #                                                       Display.BUTTON_ARMED_MANUAL_TOP, 
-        #                                                       Display.BUTTON_ARMED_MANUAL_WIDTH, 
-        #                                                       Display.BUTTON_ARMED_MANUAL_HEIGHT))
-        # self.pushButton_armed_manual.setFont(self.getRegularFont(11))
-        # self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
-        # self.pushButton_armed_manual.setCheckable(True)
-        # self.pushButton_armed_manual.setObjectName(Display.BUTTON_ARMED_MANUAL_OBJECT_NAME)
-        # self.applyShadowEffect(self.pushButton_armed_manual)
+        self.algoHorizontalLayoutWidget = QtWidgets.QWidget(self.groupBox_algo)
+        self.algoHorizontalLayout = QtWidgets.QHBoxLayout(self.algoHorizontalLayoutWidget)
+        self.algoHorizontalLayout.setContentsMargins(10, 10, 10, 10)
         
-        # self.pushButton_auto_engage = QtWidgets.QPushButton(self.groupBox_arm_mode)
-        # self.pushButton_auto_engage.setGeometry(QtCore.QRect(Display.BUTTON_AUTO_ENGAGE_LEFT, 
-        #                                                      Display.BUTTON_AUTO_ENGAGE_TOP, 
-        #                                                      Display.BUTTON_AUTO_ENGAGE_WIDTH, 
-        #                                                      Display.BUTTON_AUTO_ENGAGE_HEIGHT))
-        # self.pushButton_auto_engage.setFont(self.getRegularFont(11))
-        # self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
-        # self.pushButton_auto_engage.setCheckable(True)
-        # self.pushButton_auto_engage.setObjectName(Display.BUTTON_AUTO_ENGAGE_OBJECT_NAME)
-        # self.pushButton_auto_engage.clicked.connect(self.enter_auto_engage_mode)
-        # self.applyShadowEffect(self.pushButton_auto_engage)
+        self.pushButton_algo_cv = QtWidgets.QPushButton(self.algoHorizontalLayoutWidget)
+        self.pushButton_algo_cv.setMinimumWidth(Display.BUTTON_ALGO_WIDTH)
+        self.pushButton_algo_cv.setGeometry(QtCore.QRect(0, 0, 
+                                                        Display.BUTTON_ALGO_WIDTH, 
+                                                        Display.BUTTON_ALGO_HEIGHT))
+        self.pushButton_algo_cv.setFont(self.getRegularFont(10))
+        self.pushButton_algo_cv.setStyleSheet(self.getDisabledButtonStyle())
+        self.pushButton_algo_cv.setCheckable(True)
+        icon = QtGui.QIcon(Display.BUTTON_OPEN_CV_ICON_PATH)
+        self.pushButton_algo_cv.setIcon(icon)
+        self.pushButton_algo_cv.setIconSize(QtCore.QSize(Display.BUTTON_ALGO_ICON_WIDTH,
+                                                         Display.BUTTON_ALGO_ICON_HEIGHT))
+        self.pushButton_algo_cv.clicked.connect(self.algo_button_clicked)
+        self.applyShadowEffect(self.pushButton_algo_cv)
+
+        self.pushButton_algo_tf = QtWidgets.QPushButton(self.algoHorizontalLayoutWidget)
+        self.pushButton_algo_tf.setMinimumWidth(Display.BUTTON_ALGO_WIDTH)
+        self.pushButton_algo_tf.setGeometry(QtCore.QRect(0, 0, 
+                                                        Display.BUTTON_ALGO_WIDTH, 
+                                                        Display.BUTTON_ALGO_HEIGHT))
+        self.pushButton_algo_tf.setFont(self.getRegularFont(10))
+        self.pushButton_algo_tf.setStyleSheet(self.getDisabledButtonStyle())
+        self.pushButton_algo_tf.setCheckable(True)
+        icon = QtGui.QIcon(Display.BUTTON_TENSOR_FLOW_ICON_PATH)
+        self.pushButton_algo_tf.setIcon(icon)
+        self.pushButton_algo_tf.setIconSize(QtCore.QSize(Display.BUTTON_ALGO_ICON_WIDTH,
+                                                         Display.BUTTON_ALGO_ICON_HEIGHT))
+        self.pushButton_algo_tf.clicked.connect(self.algo_button_clicked)
+        self.applyShadowEffect(self.pushButton_algo_tf)
+        
+        self.algoHorizontalLayout.addWidget(self.pushButton_algo_cv)
+        self.algoHorizontalLayout.addWidget(self.pushButton_algo_tf)
+        self.groupBox_algo.setLayout(self.algoHorizontalLayout)
+        
+        self.groupBox_robot_action = QtWidgets.QGroupBox()
+        self.groupBox_robot_action.setEnabled(True)
+        self.groupBox_robot_action.setMaximumHeight(Display.GROUPBOX_ALGORITHM_HEIGHT)
+        self.groupBox_robot_action.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        self.groupBox_robot_action.setFont(self.getBoldFont(13))
+        self.groupBox_robot_action.setAlignment(QtCore.Qt.AlignCenter)
+        self.groupBox_robot_action.setStyleSheet(self.getPanelStyle())
+        self.groupBox_robot_action.hide()
+
+        self.robotActionHorizontalLayoutWidget = QtWidgets.QWidget(self.groupBox_robot_action)
+        self.robotActionHorizontalLayout = QtWidgets.QHBoxLayout(self.robotActionHorizontalLayoutWidget)
+        self.robotActionHorizontalLayout.setContentsMargins(10, 10, 10, 10)
+        
+        self.nonEdit_robot_action = QtWidgets.QLineEdit(self.robotActionHorizontalLayoutWidget)
+        self.nonEdit_robot_action.setFont(self.getBoldFont(15))
+        self.nonEdit_robot_action.setStyleSheet(Style.NON_EDIT_TEXT_SYSTEM_STATE_STYLE)
+        self.nonEdit_robot_action.setReadOnly(True)
+        
+        self.robotActionHorizontalLayout.addWidget(self.nonEdit_robot_action)
+        self.groupBox_robot_action.setLayout(self.robotActionHorizontalLayout)
 
     def setupCameraVideoPanel(self):
         self.groupBox_camera_video = QtWidgets.QGroupBox()
@@ -600,6 +653,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_remote_address.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_REMOTE_ADDRESS_TITLE))
         self.editText_remote_address.setText(_translate(Display.WINDOW_TITLE, Display.EDIT_TEXT_REMOTE_ADDRESS_DEFAULT_TEXT))
         self.groupBox_algo.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_ALGORITHM_TITLE))
+        self.groupBox_robot_action.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_ROBOT_ACTION_TITLE))
+        self.pushButton_algo_cv.setText(_translate(Display.WINDOW_TITLE, Display.BUTTON_OPEN_CV_TITLE))
+        self.pushButton_algo_tf.setText(_translate(Display.WINDOW_TITLE, Display.BUTTON_TENSOR_FLOW_TITLE))
         self.groupBox_camera_video.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_CAMERA_VIDEO_TITLE))
         self.groupBox_system_state_panel.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_SYSTEM_STATE_TITLE))
         self.nonEditText_system_state.setPlainText(_translate(Display.WINDOW_TITLE, Display.NON_EDIT_TEXT_DEFAULT_TEXT))
@@ -627,6 +683,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.menuHelp.setTitle(_translate(Display.WINDOW_TITLE, Display.MENUHELP_TEXT))
         self.actionExit.setText(_translate(Display.WINDOW_TITLE, Display.MENUEXIT_TEXT))
         self.actionAbout.setText(_translate(Display.WINDOW_TITLE, Display.MENUABOUT_TEXT))
+        self.actionConfig.setText(_translate(Display.WINDOW_TITLE, Display.MENUACONFIG_TEXT))
 
     def getRegularFont(self, pointSize=11):
         font = QtGui.QFont()
@@ -710,9 +767,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
 
     def update_log(self, log_messages):
         self.nonEditText_log.setHtml("\n".join(log_messages))
-        self.scroll_to_last_line()
+        self.scroll_log_to_last_line()
         
-    def scroll_to_last_line(self):
+    def scroll_log_to_last_line(self):
         cursor = self.nonEditText_log.textCursor()
         cursor.movePosition(QtGui.QTextCursor.End)
         self.nonEditText_log.setTextCursor(cursor)
@@ -774,6 +831,14 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.pushButton_armed_manual.setStyleSheet(self.getDisabledButtonStyle())
         self.pushButton_auto_engage.setStyleSheet(self.getDisabledButtonStyle())
         self.label_camera_video.clear()
+        self.groupBox_algo.setEnabled(False)
+        self.groupBox_algo.setStyleSheet(self.getDisabledPanelStyle())
+        self.pushButton_algo_cv.setStyleSheet(self.getDisabledButtonStyle())
+        self.pushButton_algo_tf.setStyleSheet(self.getDisabledButtonStyle())
+        self.scroll_log_to_last_line()
+        self.groupBox_robot_action.hide()
+        self.update_robot_action("")
+        self.actionConfig.setEnabled(False)
     
     def enter_safe_mode(self):
         self.editText_target_order.clear()
@@ -790,6 +855,12 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_pre_arm_code.setEnabled(True)
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
         self.pushButton_pre_arm_mode.setEnabled(True)
+        self.groupBox_algo.setEnabled(True)
+        self.groupBox_algo.setStyleSheet(self.getPanelStyle())
+        self.scroll_log_to_last_line()
+        self.groupBox_robot_action.hide()
+        self.update_robot_action("")
+        self.actionConfig.setEnabled(False)
         
     def enter_pre_arm_mode(self):
         self.groupBox_arm_mode.setStyleSheet(self.getGroupBoxStyle())
@@ -811,7 +882,13 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.stackedWidget.setFocus()
         self.checkbox_laser.hide()
         self.checkbox_cal.hide()
+        self.groupBox_algo.setEnabled(False)
+        self.groupBox_algo.setStyleSheet(self.getDisabledPanelStyle())
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
+        self.scroll_log_to_last_line()
+        self.groupBox_robot_action.hide()
+        self.update_robot_action("")
+        self.actionConfig.setEnabled(True)
     
     def enter_armed_manual_mode(self):
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
@@ -828,6 +905,10 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.checkbox_cal.show()
         self.pushButton_auto_engage.setEnabled(False)
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
+        self.scroll_log_to_last_line()
+        self.groupBox_robot_action.hide()
+        self.update_robot_action("")
+        self.actionConfig.setEnabled(False)
         
     def enter_auto_engage_mode(self):
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
@@ -840,6 +921,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.stackedWidget.setCurrentIndex(Display.COMMAND_WIDGET_AUTO)
         self.stackedWidget.setFocus()
         self.slide_down(self.groupBox_command_panel, Display.GROUPBOX_COMMAND_PANEL_HEIGHT)
+        self.scroll_log_to_last_line()
+        self.groupBox_robot_action.show()
+        self.actionConfig.setEnabled(False)
         
     def handle_key_event(self, key, pressed):
         currentState = self.model.get_system_state()
@@ -888,7 +972,10 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             
     def pop_up_action_about(self):
         QtWidgets.QMessageBox.information(self, Display.MENU_ABOUT_DIALOG_TITLE, Display.MENU_ABOUT_DIALOG_TEXT)
-        
+
+    def pop_up_action_config(self):
+        self.config_dialog.show()
+
     def update_laser_state(self, enabled):
         self.checkbox_laser.setChecked(enabled)
         
@@ -900,4 +987,32 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             self.button_fire.show()
             
     def update_algorithm(self, algo):
-        print(algo)
+        if algo == Setting.CMD_USE_OPENCV:
+            self.pushButton_algo_cv.setStyleSheet(self.getSelectedButtonStyle())
+            self.pushButton_algo_tf.setStyleSheet(self.getButtonStyle())
+        elif algo == Setting.CMD_USE_TF:
+            self.pushButton_algo_cv.setStyleSheet(self.getButtonStyle())
+            self.pushButton_algo_tf.setStyleSheet(self.getSelectedButtonStyle())
+        
+    def algo_button_clicked(self):
+        sender = self.sender()
+        algoText = sender.text()
+        if algoText == Display.BUTTON_OPEN_CV_TITLE:
+            self.pushButton_algo_cv.setStyleSheet(self.getSelectedButtonStyle())
+            self.pushButton_algo_tf.setStyleSheet(self.getButtonStyle())
+        else:
+            self.pushButton_algo_cv.setStyleSheet(self.getButtonStyle())
+            self.pushButton_algo_tf.setStyleSheet(self.getSelectedButtonStyle())
+    
+    def update_robot_action(self, text):
+        self.nonEdit_robot_action.setText(text)
+    
+    def display_alert(self, text):
+        global messageBox
+        if messageBox is None:
+            messageBox = QtWidgets.QMessageBox(self)
+            messageBox.setIcon(QtWidgets.QMessageBox.Warning)
+            messageBox.setWindowTitle(Display.ALERT_DIALOG_TITLE)
+            messageBox.show()
+        messageBox.setText(text)
+        messageBox.show()
