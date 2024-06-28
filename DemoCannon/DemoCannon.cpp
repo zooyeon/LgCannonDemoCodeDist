@@ -1047,11 +1047,22 @@ static int PrintfSend(const char *fmt, ...)
             if (WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgHdr, sizeof(TMesssageHeader)) != sizeof(TMesssageHeader))
             {
                 pthread_mutex_unlock(&TCP_Mutex);
+                printf("Connection Lost when sending data header: %s\n", strerror(errno));
+                isConnected = false;
+                enterSafe(SAFE);
                 return (-1);
             }
             retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)Buffer, BytesWritten);
         }
        pthread_mutex_unlock(&TCP_Mutex);
+
+       if (retval < BytesWritten)
+       {
+           printf("Connection Lost when sending data: %s\n", strerror(errno));
+           isConnected = false;
+           enterSafe(SAFE);
+       }
+
        return(retval);
       }
     else
