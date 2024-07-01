@@ -115,7 +115,7 @@ void FindTargets(const Mat& image, double minDiffThreshold) {
         vector<Point> approx;
         approxPolyDP(contour, approx, 0.02 * arcLength(contour, true), true);
 
-        if (approx.size() >= 4 && isContourConvex(approx)) {
+        if (approx.size() == 4 && isContourConvex(approx)) {
             double area = contourArea(approx);
             if (area > 400 && area < 10000) {
                 Rect boundingRect = cv::boundingRect(approx);
