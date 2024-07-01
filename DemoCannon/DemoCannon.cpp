@@ -607,12 +607,17 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   SendSystemState(SystemState);
                   usleep(1500 * 1000);
 
-                  fire(true);
-                  SendSystemState(SystemState);
-                  usleep(200 * 1000);
-
-                  fire(false);
-                  usleep(1500 * 1000); //hobin
+                  if (isConnected)
+                  {
+                      if(SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ENGAGE_AUTO)
+                      {
+                          fire(true);
+                          SendSystemState(SystemState);
+                          usleep(200 * 1000);
+                          fire(false);
+                          usleep(1500 * 1000); //hobin
+                      }
+                  }
 
                   laser(false);
                   armed(false);
@@ -995,7 +1000,7 @@ int main(int argc, const char** argv)
 		if ((TcpConnectedPort = AcceptTcpConnection(TcpListenPort, &cli_addr, &clilen)) == NULL)
 		{
 			printf("AcceptTcpConnection Failed\n");
-			return(-1);
+			//return(-1);
 		}
 		isConnected = true;
 		printf("Accepted connection Request\n");
@@ -1003,7 +1008,7 @@ int main(int argc, const char** argv)
 		if (pthread_create(&ClientThreadID, NULL, ClientHandlingThread, NULL) != 0)
 		{
 			printf("Failed to Create Client Handling Thread\n");
-			exit(0);
+			//exit(0);
 		}
     usleep(200);
   }
