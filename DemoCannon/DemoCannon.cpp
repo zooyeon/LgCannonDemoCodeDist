@@ -1356,7 +1356,14 @@ static void processConfigString(char* data)
 	if (id.compare("CV_THRESHOLD") == 0)
 	{
     openCvStrategy->setMinDiffThreshold(value);
-		//todo
+	}
+  else if (id.compare("CV_AREA1") == 0)
+	{
+		openCvStrategy->setMinContourArea(value);
+	}
+  else if (id.compare("CV_AREA2") == 0)
+	{
+		openCvStrategy->setMaxContourArea(value);
 	}
 	else if (id.compare("TF_THRESHOLD1") == 0)
 	{

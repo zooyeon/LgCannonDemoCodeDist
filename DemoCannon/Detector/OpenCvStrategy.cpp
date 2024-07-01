@@ -16,7 +16,7 @@ OpenCvStrategy::~OpenCvStrategy() {
 };
 
 void OpenCvStrategy::detect(const cv::Mat& Frame) {
-    FindTargets(Frame, minDiffThreshold);
+    FindTargets(Frame, minDiffThreshold, minContourArea, maxContourArea);
 };
 
 void OpenCvStrategy::sync(TDetected (&detected)[], int &numDetected) {
@@ -35,4 +35,12 @@ void OpenCvStrategy::sync(TDetected (&detected)[], int &numDetected) {
 
 void OpenCvStrategy::setMinDiffThreshold(double minDiffThreshold) {
     this->minDiffThreshold = minDiffThreshold;
+};
+
+void OpenCvStrategy::setMinContourArea(double minContourArea) {
+    this->minContourArea = minContourArea;
+};
+
+void OpenCvStrategy::setMaxContourArea(double maxContourArea) {
+    this->maxContourArea = maxContourArea;
 };

@@ -97,7 +97,7 @@ int LoadRefImages(Symbol* symbols) {
 
 }
 
-void FindTargets(const Mat& image, double minDiffThreshold) {
+void FindTargets(const Mat& image, double minDiffThreshold, double minContourArea, double maxContourArea) {
     NumMatches = 0;
     Mat gray;
     cvtColor(image, gray, COLOR_BGR2GRAY);
@@ -117,7 +117,7 @@ void FindTargets(const Mat& image, double minDiffThreshold) {
 
         if (approx.size() == 4 && isContourConvex(approx)) {
             double area = contourArea(approx);
-            if (area > 400 && area < 10000) {
+            if (area > minContourArea && area < maxContourArea) {
                 Rect boundingRect = cv::boundingRect(approx);
                 float ratio = (float)boundingRect.width / boundingRect.height;
                 if (ratio > 0.7 && ratio < 1.3) {

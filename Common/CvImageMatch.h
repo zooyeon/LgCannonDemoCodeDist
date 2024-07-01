@@ -35,6 +35,6 @@ extern int NumMatches;
 
 int LoadRefImages(Symbol* symbols);
 void DrawTargets(cv::Mat src);
-void FindTargets(const cv::Mat& image, double minDiffThreshold = 1000000);
+void FindTargets(const cv::Mat& image, double minDiffThreshold = 1000000, double minContourArea = 1000, double maxContourArea = 30000);
 void WriteFile(const  char* path, const char* folder, const char* filename,char* ext, const cv::Mat src);
 #endif
