@@ -1302,6 +1302,7 @@ static void processConfigString(char* data)
 	printf("id = %s, value = %d", id, value);
 	if (id.compare("CV_THRESHOLD") == 0)
 	{
+    openCvStrategy->setMinDiffThreshold(value);
 		//todo
 	}
 	else if (id.compare("TF_THRESHOLD1") == 0)
