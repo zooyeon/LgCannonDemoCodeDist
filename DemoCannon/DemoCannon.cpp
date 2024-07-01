@@ -38,7 +38,7 @@
 #define SAFE_TILT        ( 45.0f)
 #define SAFE_PAN         ( 60.0f)
 
-#define TF_EPSILON      0.5
+#define TF_EPSILON      0.8
 #define CV_EPSILON      0.5
 
 #define WIDTH           1920
