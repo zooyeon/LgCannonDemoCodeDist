@@ -193,6 +193,8 @@ static void enterSafe(SystemState_t state) {
     isPaused = false;
     if(isConnected)
         SendCommandResponse(currentAlgorithm);
+
+    printf("Enter Safe state finished\n");
 }
 
 static void enterPrearm(SystemState_t state, bool reset_needed) {
@@ -1044,7 +1046,7 @@ static void * DetectThread(void *data)
     ProcessTargetEngagements(&AutoEngage,Frame.cols,Frame.rows);
     usleep(200);
   }
-
+  DetectThreadID = -1;
   return NULL;
 }
 //------------------------------------------------------------------------------------------------
@@ -1160,6 +1162,7 @@ static int SendSystemState(SystemState_t State)
         isConnected = false;
         enterSafe(SAFE);
     }
+    printf("start Send Sytem state done %d\n", retval);
 	return(retval);
 }
 //------------------------------------------------------------------------------------------------
@@ -1709,12 +1712,12 @@ static void *NetworkInputThread(void *data)
  SendSystemState(SystemState);
  SendCommandResponse(currentAlgorithm);
 
- while (1)
+ while (isConnected)
  {
    if ((retval=recv(fd, &Buffer, sizeof(TMesssageHeader),0)) != sizeof(TMesssageHeader))
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connection Lost %s\n", strerror(errno));
+      else printf("Connection Lost ret = %d: %s\n", retval, strerror(errno));
       isConnected = false;
       enterSafe(SAFE);
       break;
@@ -1731,7 +1734,7 @@ static void *NetworkInputThread(void *data)
    if ((retval=recv(fd, &Buffer[sizeof(TMesssageHeader)],  MsgHdr->Len,0)) !=  MsgHdr->Len)
      {
       if (retval==0) printf("Client Disconnnected\n");
-      else printf("Connection Lost %s\n", strerror(errno));
+      else printf("Connection Lost ret = %d: %s\n", retval, strerror(errno));
       isConnected = false;
       enterSafe(SAFE);
       break;
@@ -1842,7 +1845,7 @@ RestoreKeyboard();                // restore Keyboard
  }
  if (DetectThreadID!=-1)
   {
-   //printf("Cancel Detect Thread\n");
+   printf("Cancel Detect Thread\n");
    s = pthread_cancel(DetectThreadID);
    if (s!=0)  printf("Detect Thread Cancel Failure\n");
 
@@ -1897,8 +1900,8 @@ static void CleanClientThread(void)
     if (NetworkThreadID != -1)
     {
         //printf("Cancel Network Thread\n");
-        s = pthread_cancel(NetworkThreadID);
-        if (s != 0)  printf("Network Thread Cancel Failure\n");
+        //s = pthread_cancel(NetworkThreadID);
+        //if (s != 0)  printf("Network Thread Cancel Failure\n");
 
         //printf("Network Thread Join\n");
         s = pthread_join(NetworkThreadID, &res);
@@ -1912,8 +1915,8 @@ static void CleanClientThread(void)
     if (DetectThreadID != -1)
     {
         //printf("Cancel Detect Thread\n");
-        s = pthread_cancel(DetectThreadID);
-        if (s != 0)  printf("Detect Thread Cancel Failure\n");
+        //s = pthread_cancel(DetectThreadID);
+        //if (s != 0)  printf("Detect Thread Cancel Failure\n");
 
         //printf("Detect Thread Join\n");
         s = pthread_join(DetectThreadID, &res);
@@ -1923,11 +1926,15 @@ static void CleanClientThread(void)
             printf("Detect Thread canceled\n");
         else
             printf("Detect Thread was not canceled\n");
+
+        DetectThreadID = -1;
     }
 
     laser(false);
     fire(false);
     calibrate(false);
+
+    printf("Client disconnected and CleanUp Complete\n");
 }
 
 //
