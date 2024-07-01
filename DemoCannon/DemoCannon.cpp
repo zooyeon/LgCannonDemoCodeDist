@@ -58,6 +58,15 @@ typedef enum {
   TENSOR
 } DetectorStrategy;
 
+typedef enum {
+  SCAN_DOWN,
+  SCAN_UP,
+  SCAN_LEFT,
+  SCAN_RIGHT,
+  SCAN_FAIL
+}ScanDirection;
+
+
 typedef enum
 {
  NOT_ACTIVE,
@@ -67,7 +76,8 @@ typedef enum
  TRACKING,
  TRACKING_STABLE,
  ENGAGEMENT_IN_PROGRESS,
- ENGAGEMENT_COMPLETE
+ ENGAGEMENT_COMPLETE,
+ SCANNING
 } TEngagementState;
 
 
@@ -410,6 +420,12 @@ static void laser(bool value)
 //------------------------------------------------------------------------------------------------
 // static void ProcessTargetEngagements
 //------------------------------------------------------------------------------------------------
+static int scanDirection = SCAN_DOWN;
+static int trackingCount = 0;
+static void resetScanCondition() {
+  scanDirection = SCAN_DOWN;
+  trackingCount = 0;
+}
 static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 {
     if (isPaused)
@@ -433,40 +449,16 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    Auto->LastTilt=-99999.99;
                    NewState=true;
                    SeekingStartedTime = chrono::steady_clock::now();
-
+                   scanDirection = SCAN_DOWN;
    case LOOKING_FOR_TARGET:
    case TRACKING:
                 {
-                   double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
-                   if (elapsed > SEEK_TIME_MAX)
-                   {
-                       printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                       PrintfSendWithTag(TITLE, "Seeking time is timeout diff = %2lf\n", elapsed);
-                       
-                       /*Auto->State = NOT_ACTIVE;
-                       SystemState = PREARMED;
-                       SendSystemState(SystemState);*/
-                       AutoEngage.CurrentIndex++;
-                       if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
-                       {
-                           Auto->State = NOT_ACTIVE;
-                           SystemState = PREARMED;
-                           SendSystemState(SystemState);
-                           PrintfSendWithTag(TITLE, "Target List Completed\n");
-                       }
-                       else {
-                           PrintfSendWithTag(TITLE, "Skip it, find the next target\n");
-                           Auto->State = NEW_TARGET;
-                       }
-
-                       break;
-                   }
-
                   int retval;
                   TEngagementState state=LOOKING_FOR_TARGET;
                   TDetected item = detector->getDetectedItem(Auto->Target);
 
                   if (item.match != -1) {
+                    resetScanCondition();
                     float PanError,TiltError;
                     PanError=(item.center.x+xCorrect)-width/2;
                     Pan=Pan-PanError/95;
@@ -498,6 +490,39 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     Auto->LastTilt=Tilt;
                     if (Auto->StableCount>2) state=TRACKING_STABLE;
                     else state=TRACKING;
+                  }
+                  else {
+                    trackingCount++;
+                    if(trackingCount > 5) {
+                      state = SCANNING;
+                      trackingCount = 0;
+                      if(scanDirection == SCAN_FAIL) {
+                        // Need to implement time out;
+                        double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
+                        if (elapsed > SEEK_TIME_MAX)
+                        {
+                            printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                            PrintfSendWithTag(TITLE, "Seeking time is timeout diff = %2lf\n", elapsed);
+                            
+                            /*Auto->State = NOT_ACTIVE;
+                            SystemState = PREARMED;
+                            SendSystemState(SystemState);*/
+                            AutoEngage.CurrentIndex++;
+                            if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
+                            {
+                                Auto->State = NOT_ACTIVE;
+                                SystemState = PREARMED;
+                                SendSystemState(SystemState);
+                                PrintfSendWithTag(TITLE, "Target List Completed\n");
+                            }
+                            else {
+                                PrintfSendWithTag(TITLE, "Skip it, find the next target\n");
+                                Auto->State = NEW_TARGET;
+                            }
+                            break;
+                        }
+                      }
+                    }
                   }
 
                   if (Auto->State!=state)
@@ -532,6 +557,34 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                           Previous_Hit_Miss_Status.Target = item.match;
                         }
                      }
+                }
+                break;
+                case SCANNING:
+                {
+                  Pan = Tilt = 0;
+                  switch(scanDirection) {
+                    case SCAN_DOWN: // Down
+                      Tilt = -(MAX_TILT / 2);
+                      scanDirection = SCAN_UP;
+                      break;
+                    case SCAN_UP: // Up
+                      Tilt = MAX_TILT / 2;
+                      scanDirection = SCAN_LEFT;
+                      break;
+                    case SCAN_LEFT: // Left
+                      Pan = MAX_PAN / 2;
+                      Tilt = -(MAX_TILT / 2);
+                      scanDirection = SCAN_RIGHT;
+                      break;
+                    case SCAN_RIGHT: // Right
+                      Pan = -(MAX_PAN / 2);
+                      Tilt = -(MAX_TILT / 2);
+                      scanDirection = SCAN_FAIL;
+                      break;
+                  }
+                  ServoAngle(PAN_SERVO, Pan);
+                  ServoAngle(TILT_SERVO, Tilt);
+                  Auto->State = LOOKING_FOR_TARGET;
                 }
                 break;
    case ENGAGEMENT_IN_PROGRESS:

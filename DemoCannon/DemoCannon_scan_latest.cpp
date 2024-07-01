@@ -12,6 +12,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/select.h>
+#include <string>
 #include "NetworkTCP.h"
 #include "TcpSendRecvJpeg.h"
 #include "Message.h"
@@ -38,7 +39,7 @@
 #define SAFE_PAN         ( 60.0f)
 
 #define TF_EPSILON      1.2
-#define CV_EPSILON      0.3
+#define CV_EPSILON      0.5
 
 #define WIDTH           1920
 #define HEIGHT          1080
@@ -61,7 +62,8 @@ typedef enum {
   SCAN_DOWN,
   SCAN_UP,
   SCAN_LEFT,
-  SCAN_RIGHT
+  SCAN_RIGHT,
+  SCAN_FAIL
 }ScanDirection;
 
 
@@ -164,7 +166,7 @@ static void   ServoAngle(int Num,float &Angle) ;
 static Detector *detector;
 static OpenCvStrategy *openCvStrategy;
 static TfliteStrategy *tfliteStrategy;
-static float epsilon = CV_EPSILON;
+static volatile float epsilon = CV_EPSILON;
 
 static void laser(bool value);
 static void calibrate(bool value);
@@ -175,6 +177,7 @@ static void enterSafe(SystemState_t state);
 static void enterPrearm(SystemState_t state, bool reset_needed = true);
 static void enterAutoEngage(SystemState_t state);
 static void enterArmedManual(SystemState_t state);
+static void processConfigString(char* data);
 
 /*******************New functions*****************/
 
@@ -445,27 +448,14 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                    Auto->LastPan=-99999.99;
                    Auto->LastTilt=-99999.99;
                    NewState=true;
-                   resetScanCondition();
                    SeekingStartedTime = chrono::steady_clock::now();
-
+                   scanDirection = SCAN_DOWN;
    case LOOKING_FOR_TARGET:
    case TRACKING:
                 {
-                   double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
-                   if (elapsed > SEEK_TIME_MAX)
-                   {
-                       printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
-                       PrintfSendWithTag(ERR, "Seeking time is timeout diff = %2lf\n", elapsed);
-                       Auto->State = NOT_ACTIVE;
-                       SystemState = PREARMED;
-                       SendSystemState(SystemState);
-                   }
-
                   int retval;
                   TEngagementState state=LOOKING_FOR_TARGET;
                   TDetected item = detector->getDetectedItem(Auto->Target);
-
-                  printf("[SIMSON] Get detected num(%d)\n", detector->numDetected);
 
                   if (item.match != -1) {
                     resetScanCondition();
@@ -503,11 +493,34 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   }
                   else {
                     trackingCount++;
-                    if(trackingCount > 10) {
+                    if(trackingCount > 5) {
                       state = SCANNING;
                       trackingCount = 0;
-                      if(scanDirection == SCAN_RIGHT) {
+                      if(scanDirection == SCAN_FAIL) {
                         // Need to implement time out;
+                        double elapsed = chrono::duration_cast <chrono::milliseconds> (std::chrono::steady_clock::now() - SeekingStartedTime).count();
+                        if (elapsed > SEEK_TIME_MAX)
+                        {
+                            printf("[Unsafe] Seeking time is timeout diff = %2lf\n", elapsed);
+                            PrintfSendWithTag(TITLE, "Seeking time is timeout diff = %2lf\n", elapsed);
+                            
+                            /*Auto->State = NOT_ACTIVE;
+                            SystemState = PREARMED;
+                            SendSystemState(SystemState);*/
+                            AutoEngage.CurrentIndex++;
+                            if (AutoEngage.CurrentIndex >= AutoEngage.NumberOfTartgets)
+                            {
+                                Auto->State = NOT_ACTIVE;
+                                SystemState = PREARMED;
+                                SendSystemState(SystemState);
+                                PrintfSendWithTag(TITLE, "Target List Completed\n");
+                            }
+                            else {
+                                PrintfSendWithTag(TITLE, "Skip it, find the next target\n");
+                                Auto->State = NEW_TARGET;
+                            }
+                            break;
+                        }
                       }
                     }
                   }
@@ -560,11 +573,13 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                       break;
                     case SCAN_LEFT: // Left
                       Pan = MAX_PAN / 2;
+                      Tilt = -(MAX_TILT / 2);
                       scanDirection = SCAN_RIGHT;
                       break;
                     case SCAN_RIGHT: // Right
                       Pan = -(MAX_PAN / 2);
-                      scanDirection = SCAN_DOWN;
+                      Tilt = -(MAX_TILT / 2);
+                      scanDirection = SCAN_FAIL;
                       break;
                   }
                   ServoAngle(PAN_SERVO, Pan);
@@ -1084,11 +1099,22 @@ static int PrintfSend(const char *fmt, ...)
             if (WriteDataTcp(TcpConnectedPort, (unsigned char*)&MsgHdr, sizeof(TMesssageHeader)) != sizeof(TMesssageHeader))
             {
                 pthread_mutex_unlock(&TCP_Mutex);
+                printf("Connection Lost when sending data header: %s\n", strerror(errno));
+                isConnected = false;
+                enterSafe(SAFE);
                 return (-1);
             }
             retval = WriteDataTcp(TcpConnectedPort, (unsigned char*)Buffer, BytesWritten);
         }
        pthread_mutex_unlock(&TCP_Mutex);
+
+       if (retval < BytesWritten)
+       {
+           printf("Connection Lost when sending data: %s\n", strerror(errno));
+           isConnected = false;
+           enterSafe(SAFE);
+       }
+
        return(retval);
       }
     else
@@ -1288,6 +1314,80 @@ static void ProcessFiringOrder(char * FiringOrder)
 //------------------------------------------------------------------------------------------------
 // END static void ProcessFiringOrder
 //------------------------------------------------------------------------------------------------
+ 
+static void processConfigString(char* data)
+{
+    if (((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != PREARMED))
+    {
+        printf("received Config request outside of Pre-Arm\n");
+        return;
+    }
+	/*format: id:value
+	1) CV_THRESHOLD
+	2) TF_THRESHOLD1
+	3) TF_THRESHOLD2
+	4) TF_DY_MV */
+	if (strlen(data) > 50)
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+		return;
+	}
+	std::string config_string(data);
+	std::string delimiter = ":";
+	size_t pos = 0;
+	std::string id;
+	int value = -1;
+	pos = config_string.find(delimiter);
+	if (pos == std::string::npos)
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+		return;
+	}
+
+	id = config_string.substr(0, pos);
+	config_string.erase(0, pos + delimiter.length());
+	if (config_string.length() > 0)
+	{
+		value = stoi(config_string);
+	}
+	printf("id = %s, value = %d", id, value);
+	if (id.compare("CV_THRESHOLD") == 0)
+	{
+		//todo
+	}
+	else if (id.compare("TF_THRESHOLD1") == 0)
+	{
+		// this is the paremeter for score of tensorflow 
+    float tf_score = value / 10.0f;
+    TfliteStrategy* st = (TfliteStrategy*)(detector->getStrategy());
+    st->setScore(tf_score);
+	}
+	else if (id.compare("TF_THRESHOLD2") == 0)
+	{
+		// this is the paremeter for boxes threshold
+    float tf_box_threshold = value / 100.0f;
+    TfliteStrategy* st = (TfliteStrategy*)(detector->getStrategy());
+    st->setBoxThreshold(tf_box_threshold);
+	}
+  else if (id.compare("TF_EPSILON") == 0) {
+    //todo
+    float tf_epsilon = value / 100.0f;
+    epsilon = tf_epsilon;
+  }
+	else if (id.compare("TF_DY_MV") == 0)
+	{
+		//todo
+	}
+	else
+	{
+		printf("Config string has error\n");
+		PrintfSendWithTag(ERR, "Config string has error\n");
+	}
+}
+ 
+// 
 //------------------------------------------------------------------------------------------------
 // static void ProcessCommands
 //------------------------------------------------------------------------------------------------
@@ -1519,6 +1619,11 @@ static void* ClientHandlingThread(void* data) {
         printf("Failed to Create Detect Input Thread\n");
         exit(0);
     }
+    //reset Cannon direction
+    Pan = 0;
+    Tilt = 0;
+    ServoAngle(PAN_SERVO, Pan);
+    ServoAngle(TILT_SERVO, Tilt);
 
     while (isConnected)
     {
@@ -1647,6 +1752,12 @@ static void *NetworkInputThread(void *data)
        msgChangeStateRequest->State=(SystemState_t)ntohl(msgChangeStateRequest->State);
 
        ProcessStateChangeRequest(msgChangeStateRequest->State);
+      }
+      break;
+      case MT_CONFIG:
+      {
+          TMesssageConfigString* msgConfigString = (TMesssageConfigString*)Buffer;
+          processConfigString(msgConfigString->data);
       }
       break;
 
