@@ -38,7 +38,7 @@
 #define SAFE_TILT        ( 45.0f)
 #define SAFE_PAN         ( 60.0f)
 
-#define TF_EPSILON      1.2
+#define TF_EPSILON      0.5
 #define CV_EPSILON      0.5
 
 #define WIDTH           1920
@@ -459,12 +459,22 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                   if (item.match != -1) {
                     resetScanCondition();
-                    float PanError,TiltError;
-                    PanError=(item.center.x+xCorrect)-width/2;
-                    Pan=Pan-PanError/95;
 
-                    TiltError=(item.center.y+yCorrect)-height/2;
-                    Tilt=Tilt-TiltError/95;
+                    float PanError, TiltError;
+                    float distance = sqrt(pow(item.center.x - width / 2, 2) + pow(item.center.y - height / 2, 2));
+                    float panCoefficient = std::max(40.0f, std::min(95.0f, 95.0f - (distance / 20.0f)));
+                    float tiltCoefficient = std::max(40.0f, std::min(95.0f, 95.0f - (distance / 20.0f)));
+                    PanError = (item.center.x + xCorrect) - width / 2;
+                    Pan = Pan - PanError / panCoefficient;
+                    TiltError = (item.center.y + yCorrect) - height / 2;
+                    Tilt = Tilt - TiltError / tiltCoefficient;
+
+                    // float PanError,TiltError;
+                    // PanError=(item.center.x+xCorrect)-width/2;
+                    // Pan=Pan-PanError/95;
+
+                    // TiltError=(item.center.y+yCorrect)-height/2;
+                    // Tilt=Tilt-TiltError/95;
 
                     if (abs(Pan) > SAFE_PAN || abs(Tilt) > SAFE_TILT)
                     {
