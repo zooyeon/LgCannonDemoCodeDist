@@ -13,6 +13,7 @@ public:
     TDetected getDetectedItem(int target);
     void setStrategy(DetectStrategy *strategy);
     int getNumDetected();
+    DetectStrategy* getStrategy() { return strategy; }
 
 private:
     TDetected detected[20];

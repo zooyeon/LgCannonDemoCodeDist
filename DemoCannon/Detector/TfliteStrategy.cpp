@@ -1,5 +1,7 @@
 #include "TfliteStrategy.hpp"
 
+volatile float TfliteStrategy::score_ = 0.25f;
+
 TfliteStrategy::TfliteStrategy(){
     printf("TensorFlow Lite Mode\n");
     tf = new ObjectDetector("../TfLite-2.17/Data/detect.tflite", false);
@@ -18,7 +20,7 @@ void TfliteStrategy::sync(TDetected (&detected)[], int &numDetected) {
     numDetected = 0;
     for (int i = 0; i < tf->DETECT_NUM; ++i) 
     {
-        if (res[i].score<0.25) continue;
+        if (res[i].score<score_) continue;
 
         float x = res[i].xmin + res[i].xmax;
         float y = res[i].ymin + res[i].ymax;
@@ -38,3 +40,12 @@ void TfliteStrategy::sync(TDetected (&detected)[], int &numDetected) {
     delete[] res;
     res = nullptr;
 };
+
+void TfliteStrategy::setBoxThreshold(float threshold) {
+    tf->setBoxThreshold(threshold);
+}
+
+void TfliteStrategy::setScore(float score) {
+    score_ = score;
+    printf("Score has been changed to %f\n", score_);
+}

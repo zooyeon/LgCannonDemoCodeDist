@@ -4,6 +4,8 @@
 
 using namespace cv;
 
+volatile float ObjectDetector::NMS_IOU_THRESHOLD = 0.3f;
+
 ObjectDetector::ObjectDetector(const char* tfliteModelPath, bool quantized, bool useXnn) {
     m_modelQuantized = quantized;
     initDetectionModel(tfliteModelPath, useXnn);
@@ -111,24 +113,31 @@ float ObjectDetector::intersectionOverUnion(const DetectResult& a, const DetectR
 }
 
 std::vector<int> ObjectDetector::applyNMS(const std::vector<DetectResult>& detections, float iouThreshold) {
-    std::vector<int> indices;
+    std::vector<int> indices(detections.size());
+    std::iota(indices.begin(), indices.end(), 0);
+    std::sort(indices.begin(), indices.end(), [&detections](int a, int b) {
+        return detections[a].score > detections[b].score;
+    });
+
+    std::vector<int> finalIndices;
     std::vector<bool> suppressed(detections.size(), false);
 
-    for (size_t i = 0; i < detections.size(); ++i) {
-        if (suppressed[i])
+    for (size_t i = 0; i < indices.size(); ++i) {
+        int idx = indices[i];
+        if (suppressed[idx])
             continue;
 
-        indices.push_back(i);
+        finalIndices.push_back(idx);
 
-        for (size_t j = i + 1; j < detections.size(); ++j) {
-            if (intersectionOverUnion(detections[i], detections[j]) > iouThreshold) {
-				// printf("[SIMSON]In applyNMS, Suppressed, label(%d)\n", detections[j].label);
-                suppressed[j] = true;
+        for (size_t j = i + 1; j < indices.size(); ++j) {
+            int nextIdx = indices[j];
+            if (intersectionOverUnion(detections[idx], detections[nextIdx]) > iouThreshold) {
+                suppressed[nextIdx] = true;
             }
         }
     }
 
-    return indices;
+    return finalIndices;
 }
 
 DetectResult* ObjectDetector::detect(Mat src) {
@@ -190,4 +199,9 @@ DetectResult* ObjectDetector::detect(Mat src) {
     }
 
     return res;
+}
+
+void ObjectDetector::setBoxThreshold(float threshold) { 
+    NMS_IOU_THRESHOLD = threshold;
+    printf("Box threshold has been changed to %f\n", NMS_IOU_THRESHOLD);
 }

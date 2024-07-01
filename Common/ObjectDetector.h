@@ -5,6 +5,7 @@
 #include "tensorflow/lite/c/c_api.h"
 #include "tensorflow/lite/delegates/xnnpack/xnnpack_delegate.h"
 #include <vector>
+#include <numeric>
 
 using namespace cv;
 
@@ -23,6 +24,7 @@ public:
     ~ObjectDetector();
     DetectResult* detect(Mat src);
     const int DETECT_NUM = 20;
+    void setBoxThreshold(float threshold);
 private:
     // members
     int model_resize_width;
@@ -49,5 +51,5 @@ private:
     float intersectionOverUnion(const DetectResult& a, const DetectResult& b);
 
     // Constants
-    static constexpr float NMS_IOU_THRESHOLD = 0.3f;
+    static volatile float NMS_IOU_THRESHOLD;
 };
