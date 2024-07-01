@@ -1378,7 +1378,7 @@ static void processConfigString(char* data)
 	else if (id.compare("TF_THRESHOLD1") == 0)
 	{
 		// this is the paremeter for score of tensorflow 
-    float tf_score = value / 10.0f;
+    float tf_score = value / 100.0f;
     TfliteStrategy* st = (TfliteStrategy*)(detector->getStrategy());
     st->setScore(tf_score);
 	}

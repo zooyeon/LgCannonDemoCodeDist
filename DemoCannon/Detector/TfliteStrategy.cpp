@@ -1,6 +1,6 @@
 #include "TfliteStrategy.hpp"
 
-volatile float TfliteStrategy::score_ = 0.25f;
+volatile float TfliteStrategy::score_ = 0.10f;
 
 TfliteStrategy::TfliteStrategy(){
     printf("TensorFlow Lite Mode\n");
