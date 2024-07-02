@@ -580,7 +580,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                       scanDirection = SCAN_UP;
                       break;
                     case SCAN_UP: // Up
-                      Tilt = MAX_TILT / 2;
+                      Tilt = MAX_TILT / 3;
                       scanDirection = SCAN_LEFT;
                       break;
                     case SCAN_LEFT: // Left
@@ -609,7 +609,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                   if (isConnected)
                   {
-                      if((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ENGAGE_AUTO)
+                     if((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) == ENGAGE_AUTO)
                       {
                           fire(true);
                           SendSystemState(SystemState);
