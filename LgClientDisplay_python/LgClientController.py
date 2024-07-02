@@ -1,3 +1,4 @@
+import threading
 from PyQt5 import QtWidgets, QtCore
 import cv2
 from LgClientModel import LgClientModel
@@ -5,14 +6,20 @@ from LgClientDisplay import LgClientDisplay
 import queue
 
 from TcpSendReceiver import TcpSendReceiver
-from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
+from VideoRecorder import VideoRecorder
+from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_AREA_MAX_OBJECT_NAME, BUTTON_CV_AREA_MIN_OBJECT_NAME,\
+                                    BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_EPSILON_OBJECT_NAME, \
+                                    BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, \
+                                    KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
                                     SUB_STATE_ARMED, SUB_STATE_CALIB_OFF, SUB_STATE_CALIB_ON, SUB_STATE_FIRING, SUB_STATE_LASER_OFF, SUB_STATE_LASER_ON
 from constant.NetworkConfig import  REMOTE_PORT_NUM, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED
-from constant.SettingConstant import ARMED, CALIB_ON, CMD_USE_OPENCV, CMD_USE_TF, CONFIG_ID_CV_AREA1, CONFIG_ID_CV_AREA2, CONFIG_ID_CV_THRESHOLD, CONFIG_ID_TF_DY_MV, CONFIG_ID_TF_T1, CONFIG_ID_TF_T2, FIRING, LASER_ON, PRE_ARM_CODE, SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, \
-                                    SYSTEM_MODE_LIST, SYSTEM_MODE_PRE_ARM, SYSTEM_MODE_SAFE, SYSTEM_MODE_TEXT_ARMED_MANUAL, SYSTEM_MODE_TEXT_AUTO_ENGAGE, \
-                                    SYSTEM_MODE_TEXT_PRE_ARM, SYSTEM_MODE_TEXT_SAFE, SYSTEM_MODE_TEXT_UNKNOWN, SYSTEM_MODE_UNKNOWN, AUTO_ENGAGE_PAUSE, \
-                                    AUTO_ENGAGE_RESUME, AUTO_ENGAGE_STOP, DEC_X, DEC_Y, FIRE_START, FIRE_STOP, INC_X, INC_Y, PAN_DOWN_START, PAN_DOWN_STOP, \
-                                    PAN_LEFT_START, PAN_LEFT_STOP, PAN_RIGHT_START, PAN_RIGHT_STOP, PAN_UP_START, PAN_UP_STOP, TITLE_OPEN_CV, TITLE_TENSOR_FLOW
+from constant.SettingConstant import ARMED, CALIB_ON, CMD_USE_OPENCV, CMD_USE_TF, CONFIG_ID_CV_AREA1, CONFIG_ID_CV_AREA2, CONFIG_ID_CV_AREA_MAX, CONFIG_ID_CV_AREA_MIN, \
+                                    CONFIG_ID_CV_THRESHOLD, CONFIG_ID_TF_DY_MV, CONFIG_ID_TF_EPSILON, CONFIG_ID_TF_T1, CONFIG_ID_TF_T2, FIRING, LASER_ON, PRE_ARM_CODE, \
+                                    SYSTEM_MODE_ARMED_MANUAL, SYSTEM_MODE_AUTO_ENGAGE, SYSTEM_MODE_LIST, SYSTEM_MODE_PRE_ARM, SYSTEM_MODE_SAFE, \
+                                    SYSTEM_MODE_TEXT_ARMED_MANUAL, SYSTEM_MODE_TEXT_AUTO_ENGAGE, SYSTEM_MODE_TEXT_PRE_ARM, SYSTEM_MODE_TEXT_SAFE, SYSTEM_MODE_TEXT_UNKNOWN, \
+                                    SYSTEM_MODE_UNKNOWN, AUTO_ENGAGE_PAUSE, AUTO_ENGAGE_RESUME, AUTO_ENGAGE_STOP, DEC_X, DEC_Y, FIRE_START, FIRE_STOP, INC_X, INC_Y, \
+                                    PAN_DOWN_START, PAN_DOWN_STOP, PAN_LEFT_START, PAN_LEFT_STOP, PAN_RIGHT_START, PAN_RIGHT_STOP, PAN_UP_START, PAN_UP_STOP, TITLE_OPEN_CV, \
+                                    TITLE_TENSOR_FLOW
                                         
 class LgClientController(QtCore.QThread):
 
@@ -22,6 +29,10 @@ class LgClientController(QtCore.QThread):
         self.model = LgClientModel()
         self.ui = LgClientDisplay(self.model)
         self.event_queue = queue.Queue()
+        self.videoRecorder = VideoRecorder()
+        self.lock = threading.Lock()
+        self.image_height = 0
+        self.image_width = 0
 
         self.ui.pushButton_connection.clicked.connect(self.enqueue_connect_to_server)
         # State button
@@ -55,10 +66,15 @@ class LgClientController(QtCore.QThread):
         self.ui.config_dialog.button_set_cv_threshold.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_cv_area1.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_cv_area2.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_cv_area_min.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_cv_area_max.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_tf_score.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_set_tf_box.clicked.connect(self.enqueue_set_config)
+        self.ui.config_dialog.button_set_tf_epsilon.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_on.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_off.clicked.connect(self.enqueue_set_config)
+        self.model.display_fire_signal.connect(self.ui.display_fire)
+        self.model.record_video_signal.connect(self.set_video_record)
         for key, button in self.ui.keys:
             button.clicked.connect(lambda checked, obj_name=button.objectName(): self.enqueue_set_click_event(obj_name))
 
@@ -89,6 +105,16 @@ class LgClientController(QtCore.QThread):
             func, args = event
             func(*args)
             self.event_queue.task_done()
+    
+    # Video Record
+    def set_video_record(self, record):
+        recorderState = self.videoRecorder.get_recording()
+        if recorderState == record:
+            return
+        
+        self.videoRecorder.set_recording(record, (self.image_width, self.image_height))
+        if not record:
+            self.videoRecorder.enqueue_stop_record_video()
     
     # Queue Function
     def enqueue_connect_to_server(self):
@@ -145,12 +171,21 @@ class LgClientController(QtCore.QThread):
         elif objectName == BUTTON_CV_AREA2_OBJECT_NAME:
             type = CONFIG_ID_CV_AREA2
             value = self.ui.config_dialog.editText_open_cv_area2.text()
+        elif objectName == BUTTON_CV_AREA_MIN_OBJECT_NAME:
+            type = CONFIG_ID_CV_AREA_MIN
+            value = self.ui.config_dialog.editText_open_cv_area_min.text()
+        elif objectName == BUTTON_CV_AREA_MAX_OBJECT_NAME:
+            type = CONFIG_ID_CV_AREA_MAX
+            value = self.ui.config_dialog.editText_open_cv_area_max.text()
         elif objectName == BUTTON_TF_T1_OBJECT_NAME:
             type = CONFIG_ID_TF_T1
             value = self.ui.config_dialog.editText_tf_score.text()
         elif objectName == BUTTON_TF_BOX_OBJECT_NAME:
             type = CONFIG_ID_TF_T2
             value = self.ui.config_dialog.editText_tf_box.text()
+        elif objectName == BUTTON_TF_EPSILON_OBJECT_NAME:
+            type = CONFIG_ID_TF_EPSILON
+            value = self.ui.config_dialog.editText_tf_epsilon.text()
         elif objectName == BUTTON_TF_DY_MV_ON_OBJECT_NAME:
             type = CONFIG_ID_TF_DY_MV
             value = 1
@@ -269,12 +304,14 @@ class LgClientController(QtCore.QThread):
     
     # Callback functions
     def update_connection(self, status):
+        if self.model.get_connection_state == status:
+            return
         if status == NETWORK_CONNECTED:
-            self.model.add_log_message_normal("Connection Successful")
             self.model.set_connection_state(NETWORK_CONNECTED)
+            self.model.add_log_message_normal("Connection Successful")
         elif status == NETWORK_DISCONNECTED:
-            self.model.add_log_message_error("Server Disconnected")
             self.model.set_connection_state(NETWORK_DISCONNECTED)
+            self.model.add_log_message_error("Server Disconnected")
         else:
             self.model.set_connection_state(NETWORK_CONNECTING)
     
@@ -306,7 +343,12 @@ class LgClientController(QtCore.QThread):
             self.model.add_log_message_server(f"{text}")
         
     def update_image(self, image):
+        height, width, channels = image.shape
+        self.image_width = width
+        self.image_height = height
         self.model.process_image_signal.emit(image)
+        if self.videoRecorder.get_recording:
+            self.videoRecorder.start_recording(image)
     
     def update_algo(self, algo):
         self.model.set_algo(algo)
@@ -384,6 +426,8 @@ class LgClientController(QtCore.QThread):
                     self.model.set_laser_state(True)
                 elif subState == CALIB_ON:
                     self.model.set_calibrate_state(True)
+                elif subState == FIRING:
+                    self.model.set_firing()
             else:
                 if currentState&LASER_ON and subState == LASER_ON:
                     self.model.add_log_message_server(f"[Action] {SUB_STATE_LASER_OFF}")

@@ -13,6 +13,8 @@ class LgClientModel(QtCore.QObject):
     algorithm_select_signal = QtCore.pyqtSignal(int)
     robot_action_signal = QtCore.pyqtSignal(str)
     display_alert_signal = QtCore.pyqtSignal(str)
+    display_fire_signal = QtCore.pyqtSignal()
+    record_video_signal = QtCore.pyqtSignal(bool)
 
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
 
@@ -91,3 +93,9 @@ class LgClientModel(QtCore.QObject):
     
     def set_alert(self, alert):
         self.display_alert_signal.emit(alert)
+        
+    def set_firing(self):
+        self.display_fire_signal.emit()
+        
+    def set_record_video(self, record):
+        self.record_video_signal.emit(record)
