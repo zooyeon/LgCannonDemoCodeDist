@@ -928,7 +928,7 @@ static void DrawCrosshair(Mat &img, Point correct, const Scalar &color)
 //------------------------------------------------------------------------------------------------
 int main(int argc, const char** argv)
 {
-  signal(SIGPIPE, SIG_IGN);
+  // signal(SIGPIPE, SIG_IGN);
   struct sockaddr_in               cli_addr;
   socklen_t                        clilen;
 
@@ -1012,11 +1012,11 @@ int main(int argc, const char** argv)
 			printf("Failed to Create Client Handling Thread\n");
 			//exit(0);
 		}
-    void *res;
-    pthread_join(ClientThreadID, &res);
+    // void *res;
+    // pthread_join(ClientThreadID, &res);
     usleep(200);
   }
-  printf("End of Main~!, isRunning(%d)\n", isRunning);
+  // printf("End of Main~!, isRunning(%d)\n", isRunning);
   return 0;
 }
 //------------------------------------------------------------------------------------------------
@@ -1943,7 +1943,7 @@ static void CleanClientThread(void)
     laser(false);
     fire(false);
     calibrate(false);
-    CloseTcpConnectedPort(&TcpConnectedPort); // Close network port;
+    // CloseTcpConnectedPort(&TcpConnectedPort); // Close network port;
     printf("Client disconnected and CleanUp Complete\n");
 }
 
