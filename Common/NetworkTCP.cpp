@@ -286,9 +286,13 @@ ssize_t WriteDataTcp(TTcpConnectedPort *TcpConnectedPort,unsigned char *data, si
   ssize_t bytes_written;
   while (total_bytes_written != length)
     {
-     bytes_written = send(TcpConnectedPort->ConnectedFd,
+     try {
+      bytes_written = send(TcpConnectedPort->ConnectedFd,
 	                               (char *)(data+total_bytes_written),
-                                  length - total_bytes_written,0);
+                                  length - total_bytes_written, MSG_NOSIGNAL);
+     }catch(std::exception &e) {
+      printf("Exception caught e:%s", e.what());
+     }
      if (bytes_written == -1)
        {
        return(-1);
