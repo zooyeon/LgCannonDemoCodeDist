@@ -12,7 +12,7 @@ public:
     void setMinContourArea(double minContourArea);
     void setMaxContourArea(double maxContourArea);
 private:
-    double minDiffThreshold = 1000000;
+    double minDiffThreshold = 1200000;
     double minContourArea = 1000;
-    double maxContourArea = 30000;
+    double maxContourArea = 35000;
 };
