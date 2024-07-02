@@ -609,7 +609,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                   if (isConnected)
                   {
-                      if(SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ENGAGE_AUTO)
+                      if((SystemState & CLEAR_LASER_FIRING_ARMED_CALIB_MASK) != ENGAGE_AUTO)
                       {
                           fire(true);
                           SendSystemState(SystemState);
