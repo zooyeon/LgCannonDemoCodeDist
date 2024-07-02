@@ -13,7 +13,6 @@ class LgClientModel(QtCore.QObject):
     algorithm_select_signal = QtCore.pyqtSignal(int)
     robot_action_signal = QtCore.pyqtSignal(str)
     display_alert_signal = QtCore.pyqtSignal(str)
-    display_fire_signal = QtCore.pyqtSignal()
     record_video_signal = QtCore.pyqtSignal(bool)
 
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
@@ -40,22 +39,32 @@ class LgClientModel(QtCore.QObject):
         return self.pre_arm_code
 
     def add_log_message_normal(self, message):
+        if message == "":
+            return
         self.log_messages.append(f'<span style="color:black">{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
     
     def add_log_message_emphasis(self, message):
+        if message == "":
+            return
         self.log_messages.append(f'<span style="color:green">{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
 
     def add_log_message_error(self, message):
+        if message == "":
+            return
         self.log_messages.append(f'<span style="color:red">{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
 
     def add_log_message_server(self, message):
+        if message == "":
+            return
         self.log_messages.append(f'<span style="color:blue">[Server]{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
         
     def add_log_message_server_error(self, message):
+        if message == "":
+            return
         self.log_messages.append(f'<span style="color:red">[Server]{message}</span><br>')
         self.log_messages_signal.emit(self.log_messages)
 
@@ -93,9 +102,6 @@ class LgClientModel(QtCore.QObject):
     
     def set_alert(self, alert):
         self.display_alert_signal.emit(alert)
-        
-    def set_firing(self):
-        self.display_fire_signal.emit()
         
     def set_record_video(self, record):
         self.record_video_signal.emit(record)

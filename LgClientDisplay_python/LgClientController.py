@@ -29,8 +29,8 @@ class LgClientController(QtCore.QThread):
         self.model = LgClientModel()
         self.ui = LgClientDisplay(self.model)
         self.event_queue = queue.Queue()
-        self.videoRecorder = VideoRecorder()
-        self.lock = threading.Lock()
+        self.videoRecorder = VideoRecorder(self.update_video_file_name)
+        self.videoRecorder.start()
         self.image_height = 0
         self.image_width = 0
 
@@ -73,7 +73,6 @@ class LgClientController(QtCore.QThread):
         self.ui.config_dialog.button_set_tf_epsilon.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_on.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_off.clicked.connect(self.enqueue_set_config)
-        self.model.display_fire_signal.connect(self.ui.display_fire)
         self.model.record_video_signal.connect(self.set_video_record)
         for key, button in self.ui.keys:
             button.clicked.connect(lambda checked, obj_name=button.objectName(): self.enqueue_set_click_event(obj_name))
@@ -330,14 +329,12 @@ class LgClientController(QtCore.QThread):
     def update_text(self, text):
         if text.find(SERVER_MESSAGE_TYPE_TITLE) != -1:
             strValue = text.replace(SERVER_MESSAGE_TYPE_TITLE, "")
-            print(f"title:{strValue}")
             self.model.set_robot_action(strValue)
         elif text.find(SERVER_MESSAGE_TYPE_ERROR) != -1:
             strValue = text.replace(SERVER_MESSAGE_TYPE_ERROR, "")
             self.model.add_log_message_server_error(strValue)
         elif text.find(SERVER_MESSAGE_TYPE_ALERT) != -1:
             strValue = text.replace(SERVER_MESSAGE_TYPE_ALERT, "")
-            print(f"alert:{strValue}")
             self.model.set_alert(strValue)
         else:
             self.model.add_log_message_server(f"{text}")
@@ -347,11 +344,14 @@ class LgClientController(QtCore.QThread):
         self.image_width = width
         self.image_height = height
         self.model.process_image_signal.emit(image)
-        if self.videoRecorder.get_recording:
-            self.videoRecorder.start_recording(image)
+        if self.videoRecorder.get_recording():
+            self.videoRecorder.enqueue_record_video(image)
     
     def update_algo(self, algo):
         self.model.set_algo(algo)
+        
+    def update_video_file_name(self, fileName):
+        self.model.add_log_message_normal(f"Video saved : {fileName}")
         
     def handleKeyForPreArmState(self, key, pressed):
         if key == KEY_UP_1 or key == KEY_UP_2:
@@ -398,25 +398,40 @@ class LgClientController(QtCore.QThread):
         self.tcpSendReceive.send_calib_to_server(code)
     
     def set_click_event(self, objectName):
-        if objectName == KEY_UP_1:
-            startcode = PAN_UP_START
-            endcod = PAN_UP_STOP
-        elif objectName == KEY_LEFT_1:
-            startcode = PAN_LEFT_START
-            endcod = PAN_LEFT_STOP
-        elif objectName == KEY_RIGHT_1:
-            startcode = PAN_RIGHT_START
-            endcod = PAN_RIGHT_STOP
-        elif objectName == KEY_DOWN_1:
-            startcode = PAN_DOWN_START
-            endcod = PAN_DOWN_STOP
-        elif objectName == KEY_FIRE_1:
-            startcode = FIRE_START
-            endcod = FIRE_STOP
+        calChecked = self.ui.checkbox_cal.isChecked()
+        print(f"calcheck: {calChecked}")
+        if calChecked:
+            if objectName == KEY_UP_1:
+                startcode = INC_Y
+            elif objectName == KEY_LEFT_1:
+                startcode = DEC_X
+            elif objectName == KEY_RIGHT_1:
+                startcode = INC_X
+            elif objectName == KEY_DOWN_1:
+                startcode = DEC_Y
+            else:
+                return
+            self.tcpSendReceive.send_calib_to_server(startcode)
         else:
-            return
-        self.tcpSendReceive.send_command_to_server(startcode)
-        self.tcpSendReceive.send_command_to_server(endcod)
+            if objectName == KEY_UP_1:
+                startcode = PAN_UP_START
+                endcod = PAN_UP_STOP
+            elif objectName == KEY_LEFT_1:
+                startcode = PAN_LEFT_START
+                endcod = PAN_LEFT_STOP
+            elif objectName == KEY_RIGHT_1:
+                startcode = PAN_RIGHT_START
+                endcod = PAN_RIGHT_STOP
+            elif objectName == KEY_DOWN_1:
+                startcode = PAN_DOWN_START
+                endcod = PAN_DOWN_STOP
+            elif objectName == KEY_FIRE_1:
+                startcode = FIRE_START
+                endcod = FIRE_STOP
+            else:
+                return
+            self.tcpSendReceive.send_command_to_server(startcode)
+            self.tcpSendReceive.send_command_to_server(endcod)
     
     def handle_sub_state(self, currentState, state):
         for subState, text in self.subStateDict.items():
@@ -426,8 +441,6 @@ class LgClientController(QtCore.QThread):
                     self.model.set_laser_state(True)
                 elif subState == CALIB_ON:
                     self.model.set_calibrate_state(True)
-                elif subState == FIRING:
-                    self.model.set_firing()
             else:
                 if currentState&LASER_ON and subState == LASER_ON:
                     self.model.add_log_message_server(f"[Action] {SUB_STATE_LASER_OFF}")
