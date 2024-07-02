@@ -343,6 +343,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.editText_pre_arm_code.setStyleSheet(Style.EDIT_TEXT_BORDER_NON_STYLE)
         self.editText_pre_arm_code.setReadOnly(False)
         self.editText_pre_arm_code.setText("")
+        self.editText_pre_arm_code.setEchoMode(QtWidgets.QLineEdit.Password)
         self.editText_pre_arm_code.setObjectName(Display.EDIT_TEXT_PRE_ARM_OBJECT_NAME)
 
     def setupArmModeGroup(self, parent):
@@ -694,7 +695,6 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.verticalLayout.setContentsMargins(10, 10, 10, 10)
         self.verticalLayout.setObjectName(Display.CAMERA_VERTICAL_LAYOUTE_OBJECT_NAME)
         
-        # self.label_camera_video = ColorLabel(self.verticalLayoutWidget)
         self.label_camera_video = QtWidgets.QLabel(self.verticalLayoutWidget)
         self.label_camera_video.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.label_camera_video.setStyleSheet(Style.LABEL_CAMERA_STYLE)
@@ -718,41 +718,10 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_camera_video.setLayout(self.verticalLayout)
 
         self.label_camera_video.resizeEvent = self.onLabelCameraVideoResize
-        # self.create_animation()
 
     def onLabelCameraVideoResize(self, event):
         self.overlayWidget.move(self.label_camera_video.width() - self.overlayWidget.width(), 0)
         event.accept()
-
-    def create_animation(self):
-        # TODO: adjust the value according to the actual firing time
-        # pause = QtCore.QPauseAnimation(1000)
-        
-        pulse1 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
-        pulse1.setDuration(100)
-        pulse1.setStartValue(QtGui.QColor(0, 0, 0, 0))
-        pulse1.setEndValue(QtGui.QColor(Display.BORDER_COLOR))
-
-        pulse2 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
-        pulse2.setDuration(100)
-        pulse2.setStartValue(QtGui.QColor(Display.BORDER_COLOR))
-        pulse2.setEndValue(QtGui.QColor(255, 0, 0, 128))
-
-        pulse3 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
-        pulse3.setDuration(100)
-        pulse3.setStartValue(QtGui.QColor(255, 0, 0, 128))
-        pulse3.setEndValue(QtGui.QColor(Display.BORDER_COLOR))
-
-        pulse4 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
-        pulse4.setDuration(100)
-        pulse4.setStartValue(QtGui.QColor(Display.BORDER_COLOR))
-        pulse4.setEndValue(QtGui.QColor(0, 0, 0, 0))
-
-        self.animation_group = QtCore.QSequentialAnimationGroup()
-        self.animation_group.addAnimation(pulse1)
-        self.animation_group.addAnimation(pulse2)
-        self.animation_group.addAnimation(pulse3)
-        self.animation_group.addAnimation(pulse4)
 
     def retranslateUi(self, LgClientDisplay):
         _translate = QtCore.QCoreApplication.translate
@@ -954,6 +923,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.update_robot_action("")
         self.actionConfig.setEnabled(False)
         self.set_record_button_enabled(False)
+        self.model.set_record_video(False)
     
     def enter_safe_mode(self):
         self.editText_target_order.clear()
@@ -1134,9 +1104,6 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         messageBox.setText(text)
         messageBox.show()
         
-    def display_fire(self):
-        self.animation_group.start()
-        
     def on_record_clicked(self):
         if self.recordMovie.state() == QMovie.Running:
             self.recordMovie.stop()
@@ -1161,13 +1128,13 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         if enabled:
             self.gifRecordLabel.setMovie(self.recordMovie)
             self.recordMovie.start()
-            self.recordMovie.stop()
             self.recordMovie.jumpToFrame(0)
+            self.recordMovie.stop()
         else:
             self.gifRecordLabel.setMovie(self.recordMovieDisabled)
             self.recordMovieDisabled.start()
-            self.recordMovieDisabled.stop()
             self.recordMovieDisabled.jumpToFrame(0)
+            self.recordMovieDisabled.stop()
             self.iconLabel.hide()
             
     def closeVideoPlayer(self):

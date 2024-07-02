@@ -6,21 +6,18 @@ from datetime import datetime
 from constant.DisplayConstant import DIALOG_VIDEO_FILE_LOCATION
 
 class VideoRecorder(QtCore.QThread):
-    def __init__(self):
+    def __init__(self, updateFileNameCallback):
         super().__init__()
-        self.event_queue_record = queue.Queue()
         self.recording = False
         self.video_writer = None
+        self.file_name = ""
+        self.update_file_name = updateFileNameCallback
+        self.event_queue_record = queue.Queue()
         
         self.directory = os.path.join(os.getcwd(), DIALOG_VIDEO_FILE_LOCATION)
         self.ensure_directory_exists(self.directory)
         self.fourcc = cv2.VideoWriter_fourcc(*'MJPG')
         
-        self.start()
-
-        self.event_queue_record.put(None)
-        self.wait()
-
     def run(self):
         while True:
             event = self.event_queue_record.get()
@@ -35,6 +32,7 @@ class VideoRecorder(QtCore.QThread):
         if record and self.video_writer is None:
             current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.video_file = os.path.join(self.directory, f"video_{current_time}.avi")
+            self.file_name = f"video_{current_time}.avi"
             self.video_writer = cv2.VideoWriter(self.video_file, self.fourcc, 35.0, frame_size)
     
     def get_recording(self):
@@ -54,11 +52,11 @@ class VideoRecorder(QtCore.QThread):
     def start_recording(self, image):
         frame = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         if self.video_writer is not None:
-            print("Writing video")
             self.video_writer.write(frame)
 
-    def stop_recording(self):
+    def stop_recording(self): 
         if self.video_writer is not None:
             self.video_writer.release()
             self.video_writer = None
             self.video_file = None
+            self.update_file_name(self.file_name)
