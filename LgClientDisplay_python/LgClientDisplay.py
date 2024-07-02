@@ -1,17 +1,19 @@
 import os
-import re
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QMovie, QImage, QPixmap
+from PyQt5 import QtCore, QtGui, QtWidgets
 
-from ConfigDialog import ConfigDialog
+from display.ColorLabel import ColorLabel
+from display.ConfigDialog import ConfigDialog
 from LgClientModel import LgClientModel
-from NumericPlainTextEdit import NumericPlainTextEdit
+from display.NumericPlainTextEdit import NumericPlainTextEdit
 import constant.DisplayConstant as Display
 import constant.SettingConstant as Setting
 import constant.NetworkConfig as Network
 import constant.StyleSheet as Style
 import keyboard
+
+from VideoPlayer import VideoPlayer
 
 messageBox = None
 
@@ -30,6 +32,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.setupUi(self)
         self.setup_key_event_listeners()
         self.installEventFilter(self)
+        self.networkConnected = False
 
     def setup_key_event_listeners(self):
         self.keys = [
@@ -88,6 +91,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.setupStatusBar(LgClientDisplay)
         
         self.config_dialog = ConfigDialog(self)
+        self.video_player = VideoPlayer(self.closeVideoPlayer)
         
         self.centralwidget = QtWidgets.QWidget(LgClientDisplay)
         self.centralwidget.setObjectName(Display.CENTRAL_OBJECT_NAME)
@@ -131,12 +135,17 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.leftLayout.addWidget(self.nonEditText_log)
 
         self.setupAlgoSelectionPanel()
+        self.setupRobotActionPanel()
+        self.setupRecordPlayPanel()
         self.setupCameraVideoPanel()
+        self.set_record_button_enabled(False)
         
         self.algoLayout = QtWidgets.QHBoxLayout()
         self.algoLayout.setAlignment(QtCore.Qt.AlignLeft)
         self.algoLayout.addWidget(self.groupBox_algo)
         self.algoLayout.addWidget(self.groupBox_robot_action)
+        self.algoLayout.addStretch()
+        self.algoLayout.addWidget(self.groupBox_record_play)
         
         self.rightLayout = QtWidgets.QVBoxLayout()
         self.rightLayout.addLayout(self.algoLayout)
@@ -599,10 +608,12 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.algoHorizontalLayout.addWidget(self.pushButton_algo_cv)
         self.algoHorizontalLayout.addWidget(self.pushButton_algo_tf)
         self.groupBox_algo.setLayout(self.algoHorizontalLayout)
-        
+
+    def setupRobotActionPanel(self):
         self.groupBox_robot_action = QtWidgets.QGroupBox()
         self.groupBox_robot_action.setEnabled(True)
         self.groupBox_robot_action.setMaximumHeight(Display.GROUPBOX_ALGORITHM_HEIGHT)
+        self.groupBox_robot_action.setMinimumWidth(Display.GROUPBOX_ROBOT_ACTION_WIDTH)
         self.groupBox_robot_action.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         self.groupBox_robot_action.setFont(self.getBoldFont(13))
         self.groupBox_robot_action.setAlignment(QtCore.Qt.AlignCenter)
@@ -620,7 +631,55 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         
         self.robotActionHorizontalLayout.addWidget(self.nonEdit_robot_action)
         self.groupBox_robot_action.setLayout(self.robotActionHorizontalLayout)
+    
+    def setupRecordPlayPanel(self):
+        self.groupBox_record_play = QtWidgets.QGroupBox()
+        self.groupBox_record_play.setEnabled(True)
+        self.groupBox_record_play.setMaximumHeight(Display.GROUPBOX_ALGORITHM_HEIGHT)
+        self.groupBox_record_play.setMaximumWidth(Display.GROUPBOX_ALGORITHM_WIDTH)
+        self.groupBox_record_play.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        self.groupBox_record_play.setFont(self.getBoldFont(13))
+        self.groupBox_record_play.setStyleSheet(self.getPanelStyle())
+        self.groupBox_record_play.setAlignment(QtCore.Qt.AlignCenter)
 
+        self.recordPlayHorizontalLayoutWidget = QtWidgets.QWidget(self.groupBox_record_play)
+        self.recordPlayHorizontalLayout = QtWidgets.QHBoxLayout(self.recordPlayHorizontalLayoutWidget)
+        
+        self.pushButton_record = QtWidgets.QPushButton(self.recordPlayHorizontalLayoutWidget)
+        self.pushButton_record.setFixedSize(Display.BUTTON_RECORD_ICON_WIDTH, Display.BUTTON_RECORD_ICON_HEIGHT)
+        self.gifRecordLabel = QtWidgets.QLabel(self.pushButton_record)
+        self.gifRecordLabel.setGeometry(self.pushButton_record.rect())
+        self.gifRecordLabel.setAlignment(QtCore.Qt.AlignCenter)
+        
+        self.recordMovie = QMovie(self.resource_path(Display.BUTTON_RECORD_ICON_PATH))
+        self.recordMovie.setScaledSize(QtCore.QSize(Display.BUTTON_RECORD_ICON_WIDTH, Display.BUTTON_RECORD_ICON_HEIGHT))
+        self.recordMovie.setSpeed(Display.GIF_SPEED)
+        
+        self.recordMovieDisabled = QMovie(self.resource_path(Display.BUTTON_RECORD_DISABLED_ICON_PATH))
+        self.recordMovieDisabled.setScaledSize(QtCore.QSize(Display.BUTTON_RECORD_ICON_WIDTH, Display.BUTTON_RECORD_ICON_HEIGHT))
+        self.recordMovieDisabled.setSpeed(Display.GIF_SPEED)
+        
+        self.gifRecordLabel.setMovie(self.recordMovieDisabled)
+        self.pushButton_record.clicked.connect(self.on_record_clicked)
+        
+        self.pushButton_play = QtWidgets.QPushButton(self.recordPlayHorizontalLayoutWidget)
+        self.pushButton_play.setFixedSize(Display.BUTTON_RECORD_ICON_WIDTH, Display.BUTTON_RECORD_ICON_HEIGHT)
+        gifPlayLabel = QtWidgets.QLabel(self.pushButton_play)
+        gifPlayLabel.setGeometry(self.pushButton_play.rect())
+        gifPlayLabel.setAlignment(QtCore.Qt.AlignCenter)
+        self.playMovie = QMovie(self.resource_path(Display.BUTTON_PLAY_ICON_PATH))
+        self.playMovie.setScaledSize(QtCore.QSize(Display.BUTTON_RECORD_ICON_WIDTH, Display.BUTTON_RECORD_ICON_HEIGHT))
+        self.playMovie.setSpeed(Display.GIF_SPEED)
+        gifPlayLabel.setMovie(self.playMovie)
+        self.pushButton_play.clicked.connect(self.on_play_clicked)
+        self.playMovie.start()
+        self.playMovie.stop()
+        self.playMovie.jumpToFrame(0)
+
+        self.recordPlayHorizontalLayout.addWidget(self.pushButton_record)
+        self.recordPlayHorizontalLayout.addWidget(self.pushButton_play)
+        self.groupBox_record_play.setLayout(self.recordPlayHorizontalLayout)
+    
     def setupCameraVideoPanel(self):
         self.groupBox_camera_video = QtWidgets.QGroupBox()
         self.groupBox_camera_video.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
@@ -635,15 +694,65 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.verticalLayout.setContentsMargins(10, 10, 10, 10)
         self.verticalLayout.setObjectName(Display.CAMERA_VERTICAL_LAYOUTE_OBJECT_NAME)
         
+        # self.label_camera_video = ColorLabel(self.verticalLayoutWidget)
         self.label_camera_video = QtWidgets.QLabel(self.verticalLayoutWidget)
         self.label_camera_video.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        self.label_camera_video.setFont(self.getRegularFont(50))
         self.label_camera_video.setStyleSheet(Style.LABEL_CAMERA_STYLE)
         self.label_camera_video.setAlignment(QtCore.Qt.AlignCenter)
         self.label_camera_video.setObjectName(Display.LABEL_CAMERA_VIDEO_OBJECT_NAME)
         
+        self.overlayWidget = QtWidgets.QWidget(self.label_camera_video)
+        self.overlayWidget.setGeometry(self.label_camera_video.width(), 
+                                       0, 
+                                       50 + Display.OVERLAY_RECORD_ICON_PADDING,
+                                       50)
+        self.overlayWidget.setStyleSheet(Style.OVERLAY_STYLE)
+        
+        self.iconLabel = QtWidgets.QLabel(self.overlayWidget)
+        self.iconLabel.setPixmap(QtGui.QPixmap(Display.OVERLAY_RECORD_ICON))
+        self.iconLabel.setScaledContents(True)
+        self.iconLabel.setGeometry(0, 0, 50, 50)
+        self.iconLabel.hide()
+        
         self.verticalLayout.addWidget(self.label_camera_video)
         self.groupBox_camera_video.setLayout(self.verticalLayout)
+
+        self.label_camera_video.resizeEvent = self.onLabelCameraVideoResize
+        # self.create_animation()
+
+    def onLabelCameraVideoResize(self, event):
+        self.overlayWidget.move(self.label_camera_video.width() - self.overlayWidget.width(), 0)
+        event.accept()
+
+    def create_animation(self):
+        # TODO: adjust the value according to the actual firing time
+        # pause = QtCore.QPauseAnimation(1000)
+        
+        pulse1 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
+        pulse1.setDuration(100)
+        pulse1.setStartValue(QtGui.QColor(0, 0, 0, 0))
+        pulse1.setEndValue(QtGui.QColor(Display.BORDER_COLOR))
+
+        pulse2 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
+        pulse2.setDuration(100)
+        pulse2.setStartValue(QtGui.QColor(Display.BORDER_COLOR))
+        pulse2.setEndValue(QtGui.QColor(255, 0, 0, 128))
+
+        pulse3 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
+        pulse3.setDuration(100)
+        pulse3.setStartValue(QtGui.QColor(255, 0, 0, 128))
+        pulse3.setEndValue(QtGui.QColor(Display.BORDER_COLOR))
+
+        pulse4 = QtCore.QPropertyAnimation(self.label_camera_video, b"border_color")
+        pulse4.setDuration(100)
+        pulse4.setStartValue(QtGui.QColor(Display.BORDER_COLOR))
+        pulse4.setEndValue(QtGui.QColor(0, 0, 0, 0))
+
+        self.animation_group = QtCore.QSequentialAnimationGroup()
+        self.animation_group.addAnimation(pulse1)
+        self.animation_group.addAnimation(pulse2)
+        self.animation_group.addAnimation(pulse3)
+        self.animation_group.addAnimation(pulse4)
 
     def retranslateUi(self, LgClientDisplay):
         _translate = QtCore.QCoreApplication.translate
@@ -654,6 +763,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.editText_remote_address.setText(_translate(Display.WINDOW_TITLE, Display.EDIT_TEXT_REMOTE_ADDRESS_DEFAULT_TEXT))
         self.groupBox_algo.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_ALGORITHM_TITLE))
         self.groupBox_robot_action.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_ROBOT_ACTION_TITLE))
+        self.groupBox_record_play.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_RECORD_PLAY_TITLE))
         self.pushButton_algo_cv.setText(_translate(Display.WINDOW_TITLE, Display.BUTTON_OPEN_CV_TITLE))
         self.pushButton_algo_tf.setText(_translate(Display.WINDOW_TITLE, Display.BUTTON_TENSOR_FLOW_TITLE))
         self.groupBox_camera_video.setTitle(_translate(Display.WINDOW_TITLE, Display.GROUPBOX_CAMERA_VIDEO_TITLE))
@@ -782,6 +892,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.editText_target_order.setText(currentTargetOrder + clickedNumber)
     
     def connection_state_changed(self, connected):
+        self.networkConnected = connected
         if connected == Network.NETWORK_CONNECTED:
             self.pushButton_connection.setText(Display.BUTTON_CONNECTION_TITLE_DISCONNECT)
             movie = QMovie(self.resource_path(Display.GIF_ICON_CONNECTED_PATH))
@@ -805,6 +916,9 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             self.gifLabel.setMovie(movie)
             
     def system_state_changed(self, state):
+        if self.networkConnected == Network.NETWORK_DISCONNECTED:
+            self.enter_unknown_mode()
+            return
         mode = self.extract_system_mode(state)
         self.nonEditText_system_state.setText(Setting.SYSTEM_MODE_DICT[mode])
         self.nonEditText_system_state.setAlignment(QtCore.Qt.AlignCenter)
@@ -839,6 +953,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_robot_action.hide()
         self.update_robot_action("")
         self.actionConfig.setEnabled(False)
+        self.set_record_button_enabled(False)
     
     def enter_safe_mode(self):
         self.editText_target_order.clear()
@@ -861,6 +976,8 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_robot_action.hide()
         self.update_robot_action("")
         self.actionConfig.setEnabled(False)
+        self.set_record_button_enabled(False)
+        self.model.set_record_video(False)
         
     def enter_pre_arm_mode(self):
         self.groupBox_arm_mode.setStyleSheet(self.getGroupBoxStyle())
@@ -889,6 +1006,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.groupBox_robot_action.hide()
         self.update_robot_action("")
         self.actionConfig.setEnabled(True)
+        self.set_record_button_enabled(True)
     
     def enter_armed_manual_mode(self):
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
@@ -1015,3 +1133,43 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             messageBox.show()
         messageBox.setText(text)
         messageBox.show()
+        
+    def display_fire(self):
+        self.animation_group.start()
+        
+    def on_record_clicked(self):
+        if self.recordMovie.state() == QMovie.Running:
+            self.recordMovie.stop()
+            self.recordMovie.jumpToFrame(0)
+            self.iconLabel.hide()
+            self.model.set_record_video(False)
+        else:
+            self.recordMovie.start()
+            self.iconLabel.show()
+            self.model.set_record_video(True)
+
+    def on_play_clicked(self):
+        if self.playMovie.state() == QMovie.Running:
+            self.playMovie.stop()
+            self.playMovie.jumpToFrame(0)
+        else:
+            self.playMovie.start()
+            self.video_player.show()
+            
+    def set_record_button_enabled(self, enabled):
+        self.pushButton_record.setEnabled(enabled)
+        if enabled:
+            self.gifRecordLabel.setMovie(self.recordMovie)
+            self.recordMovie.start()
+            self.recordMovie.stop()
+            self.recordMovie.jumpToFrame(0)
+        else:
+            self.gifRecordLabel.setMovie(self.recordMovieDisabled)
+            self.recordMovieDisabled.start()
+            self.recordMovieDisabled.stop()
+            self.recordMovieDisabled.jumpToFrame(0)
+            self.iconLabel.hide()
+            
+    def closeVideoPlayer(self):
+        self.playMovie.stop()
+        self.playMovie.jumpToFrame(0)

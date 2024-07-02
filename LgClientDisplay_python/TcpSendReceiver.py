@@ -42,10 +42,10 @@ class TcpSendReceiver:
         if self.client_socket:
             self.client_socket.close()
             self.client_socket = None
-        if self.connection_callback:
-            self.connection_callback(Network.NETWORK_DISCONNECTED)
         if self.state_callback:
             self.state_callback(Setting.SYSTEM_MODE_UNKNOWN)
+        if self.connection_callback:
+            self.connection_callback(Network.NETWORK_DISCONNECTED)
         self.image_callback = None
         self.text_callback = None
         self.state_callback = None
@@ -115,7 +115,7 @@ class TcpSendReceiver:
         np_arr = np.frombuffer(img_data, np.uint8)
         image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         last_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        if image is not None:
+        if image is not None and self.image_callback:
             self.image_callback(last_image)
 
     def process_text(self, text_data):

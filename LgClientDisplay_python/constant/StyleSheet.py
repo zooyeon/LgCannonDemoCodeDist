@@ -141,4 +141,8 @@ EDIT_TEXT_BORDER_NON_STYLE = "border: none; background-color : white;"
 
 NONEDIT_TEXT_LOG_STYLE = "border: 2px solid grey; border-radius: 10px;"
 
+VIDEO_PLAYER_PROGRESS_STYLE = "border: 2px solid grey;"
+
 LABEL_CAMERA_STYLE = "background-color: black; color: white; border-radius: 10px"
+
+OVERLAY_STYLE = "background: transparent;"
