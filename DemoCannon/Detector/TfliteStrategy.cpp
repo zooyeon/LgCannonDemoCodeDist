@@ -49,3 +49,7 @@ void TfliteStrategy::setScore(float score) {
     score_ = score;
     printf("Score has been changed to %f\n", score_);
 }
+
+int TfliteStrategy::getType() {
+    return 1;
+}

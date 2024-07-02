@@ -505,7 +505,8 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   }
                   else {
                     trackingCount++;
-                    if(trackingCount > 5) {
+                    int limitOfTrackingCount = (detector->getStrategy()->getType() == 0) ? 10 : 5;
+                    if(trackingCount > limitOfTrackingCount) {
                       state = SCANNING;
                       trackingCount = 0;
                       if(scanDirection == SCAN_FAIL) {

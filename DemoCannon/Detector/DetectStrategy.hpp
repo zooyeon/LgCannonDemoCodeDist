@@ -9,4 +9,5 @@ public:
 
     virtual void detect(const cv::Mat& Frame) = 0;
     virtual void sync(TDetected (&detected)[], int &numDetected) = 0;
+    virtual int getType() = 0;
 };

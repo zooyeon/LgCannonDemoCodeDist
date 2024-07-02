@@ -7,6 +7,7 @@ public:
 
     virtual void detect(const cv::Mat& Frame);
     virtual void sync(TDetected (&detected)[], int &numDetected);
+    virtual int getType();
     void setMinDiffThreshold(double minDiffThreshold);
     void setMinContourArea(double minContourArea);
     void setMaxContourArea(double maxContourArea);

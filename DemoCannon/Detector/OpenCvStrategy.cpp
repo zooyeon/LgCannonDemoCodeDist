@@ -44,3 +44,7 @@ void OpenCvStrategy::setMinContourArea(double minContourArea) {
 void OpenCvStrategy::setMaxContourArea(double maxContourArea) {
     this->maxContourArea = maxContourArea;
 };
+
+int OpenCvStrategy::getType() {
+    return 0;
+}
