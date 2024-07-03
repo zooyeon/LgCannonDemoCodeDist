@@ -89,7 +89,12 @@ class TcpSendReceiver:
                 msg_len, msg_type = struct.unpack('!II', msg_header)
                 msg_data = b""
                 while len(msg_data) < msg_len:
-                    chunk = self.client_socket.recv(msg_len - len(msg_data))
+                    if self.client_socket is not None:
+                        chunk = self.client_socket.recv(msg_len - len(msg_data))
+                    else:
+                        self.disconnect()
+                        print("Socket is not connected, cannot receive data")
+                        return
                     if not chunk:
                         self.disconnect()
                         break
@@ -171,7 +176,6 @@ class TcpSendReceiver:
         if self.is_connected():
             msg_type = Network.MT_CONFIG
             strValue = f"{type}:{value}"
-            print(strValue)
             msg_data = strValue.encode('ascii') + b'\0'
             self.send_message(msg_type, msg_data)
             return True

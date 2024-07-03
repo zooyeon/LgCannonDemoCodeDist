@@ -1125,7 +1125,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             
     def set_record_button_enabled(self, enabled):
         self.pushButton_record.setEnabled(enabled)
-        if enabled:
+        if enabled and self.recordMovie.state() is not QMovie.Running:
             self.gifRecordLabel.setMovie(self.recordMovie)
             self.recordMovie.start()
             self.recordMovie.jumpToFrame(0)
