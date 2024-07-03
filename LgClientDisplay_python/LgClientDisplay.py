@@ -977,6 +977,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
         self.update_robot_action("")
         self.actionConfig.setEnabled(True)
         self.set_record_button_enabled(True)
+        self.reset_number()
     
     def enter_armed_manual_mode(self):
         self.pushButton_pre_arm_mode.setStyleSheet(self.getButtonStyle())
@@ -1037,6 +1038,7 @@ class LgClientDisplay(QtWidgets.QMainWindow):
             if target_order_text == "":
                 self.pushButton_auto_start.setChecked(False)
                 return
+            self.reset_number()
             self.pushButton_auto_start.setIcon(self.pause_icon)
         else:
             self.pushButton_auto_start.setIcon(self.play_pause_icon)
@@ -1140,3 +1142,37 @@ class LgClientDisplay(QtWidgets.QMainWindow):
     def closeVideoPlayer(self):
         self.playMovie.stop()
         self.playMovie.jumpToFrame(0)
+        
+    def hit_number(self, number):
+        if number == 1:
+            self.pushButton_key_1.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 2:
+            self.pushButton_key_2.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 3:
+            self.pushButton_key_3.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 4:
+            self.pushButton_key_4.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 5:
+            self.pushButton_key_5.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 6:
+            self.pushButton_key_6.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 7:
+            self.pushButton_key_7.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 8:
+            self.pushButton_key_8.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 9:
+            self.pushButton_key_9.setStyleSheet(self.getSelectedButtonStyle())
+        elif number == 0:
+            self.pushButton_key_0.setStyleSheet(self.getSelectedButtonStyle())
+            
+    def reset_number(self):
+        self.pushButton_key_1.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_2.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_3.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_4.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_5.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_6.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_7.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_8.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_9.setStyleSheet(self.getButtonStyle())
+        self.pushButton_key_0.setStyleSheet(self.getButtonStyle())

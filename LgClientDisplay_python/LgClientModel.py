@@ -14,6 +14,7 @@ class LgClientModel(QtCore.QObject):
     robot_action_signal = QtCore.pyqtSignal(str)
     display_alert_signal = QtCore.pyqtSignal(str)
     record_video_signal = QtCore.pyqtSignal(bool)
+    hit_number_siganl = QtCore.pyqtSignal(int)
 
     key_pressed_signal = QtCore.pyqtSignal(str, bool)
 
@@ -105,3 +106,6 @@ class LgClientModel(QtCore.QObject):
         
     def set_record_video(self, record):
         self.record_video_signal.emit(record)
+        
+    def set_hit_number(self, number):
+        self.hit_number_siganl.emit(number)

@@ -321,3 +321,7 @@ BUTTON_RECORD_ICON_PATH = "./resources/video-record.gif"
 BUTTON_PLAY_ICON_PATH = "./resources/video-player.gif"
 BUTTON_RECORD_ICON_WIDTH = 40
 BUTTON_RECORD_ICON_HEIGHT = 40
+
+# Hit & Miss
+HIT_TEXT = "[Hit]"
+MISS_TEXT = "[Miss]"
