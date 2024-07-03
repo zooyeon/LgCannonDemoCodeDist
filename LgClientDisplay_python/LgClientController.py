@@ -9,8 +9,8 @@ from TcpSendReceiver import TcpSendReceiver
 from VideoRecorder import VideoRecorder
 from constant.DisplayConstant import BUTTON_CV_AREA1_OBJECT_NAME, BUTTON_CV_AREA2_OBJECT_NAME, BUTTON_CV_AREA_MAX_OBJECT_NAME, BUTTON_CV_AREA_MIN_OBJECT_NAME,\
                                     BUTTON_CV_THRESHOLD_OBJECT_NAME, BUTTON_TF_DY_MV_OFF_OBJECT_NAME, BUTTON_TF_DY_MV_ON_OBJECT_NAME, BUTTON_TF_EPSILON_OBJECT_NAME, \
-                                    BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, \
-                                    KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
+                                    BUTTON_TF_T1_OBJECT_NAME, BUTTON_TF_BOX_OBJECT_NAME, HIT_TEXT, KEY_DOWN_1, KEY_DOWN_2, KEY_FIRE_1, KEY_FIRE_2, KEY_LEFT_1, KEY_LEFT_2, \
+                                    KEY_RIGHT_1, KEY_RIGHT_2, KEY_UP_1, KEY_UP_2, MISS_TEXT, SERVER_MESSAGE_TYPE_ALERT, SERVER_MESSAGE_TYPE_ERROR, SERVER_MESSAGE_TYPE_TITLE, \
                                     SUB_STATE_ARMED, SUB_STATE_CALIB_OFF, SUB_STATE_CALIB_ON, SUB_STATE_FIRING, SUB_STATE_LASER_OFF, SUB_STATE_LASER_ON
 from constant.NetworkConfig import  REMOTE_PORT_NUM, NETWORK_CONNECTED, NETWORK_CONNECTING, NETWORK_DISCONNECTED
 from constant.SettingConstant import ARMED, CALIB_ON, CMD_USE_OPENCV, CMD_USE_TF, CONFIG_ID_CV_AREA1, CONFIG_ID_CV_AREA2, CONFIG_ID_CV_AREA_MAX, CONFIG_ID_CV_AREA_MIN, \
@@ -74,6 +74,7 @@ class LgClientController(QtCore.QThread):
         self.ui.config_dialog.button_dy_mv_on.clicked.connect(self.enqueue_set_config)
         self.ui.config_dialog.button_dy_mv_off.clicked.connect(self.enqueue_set_config)
         self.model.record_video_signal.connect(self.set_video_record)
+        self.model.hit_number_siganl.connect(self.ui.hit_number)
         for key, button in self.ui.keys:
             button.clicked.connect(lambda checked, obj_name=button.objectName(): self.enqueue_set_click_event(obj_name))
 
@@ -338,6 +339,20 @@ class LgClientController(QtCore.QThread):
             self.model.set_alert(strValue)
         else:
             self.model.add_log_message_server(f"{text}")
+            print(text)
+        if text.find(HIT_TEXT) != -1 or text.find(MISS_TEXT) != -1:
+            last_char = None
+            for char in reversed(text):
+                if char != "\n":
+                    last_char = char
+                    break
+            if not last_char:
+                return
+            
+            textJoin = "".join(text.split()).replace('\0','')
+            last_char = textJoin[-1]
+            hit_number = int(last_char)
+            self.model.set_hit_number(hit_number)
         
     def update_image(self, image):
         height, width, channels = image.shape
