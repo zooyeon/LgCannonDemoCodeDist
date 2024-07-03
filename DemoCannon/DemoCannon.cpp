@@ -27,6 +27,7 @@
 #include "Detector/Detector.hpp"
 #include "Detector/OpenCvStrategy.hpp"
 #include "Detector/TfliteStrategy.hpp"
+#include <random>
 
 #define PORT            5000
 #define PAN_SERVO       1
@@ -178,6 +179,7 @@ static void enterPrearm(SystemState_t state, bool reset_needed = true);
 static void enterAutoEngage(SystemState_t state);
 static void enterArmedManual(SystemState_t state);
 static void processConfigString(char* data);
+static int getRandomNumber(int min, int max);
 
 /*******************New functions*****************/
 
@@ -371,8 +373,14 @@ static void ServoAngle(int Num,float &Angle)
 static void fire(bool value)
 {
  pthread_mutex_lock(&GPIO_Mutex);
- if (value) SystemState=(SystemState_t)(SystemState|FIRING);
- else SystemState=(SystemState_t)(SystemState & CLEAR_FIRING_MASK);
+ if (value) {
+  SystemState=(SystemState_t)(SystemState|FIRING);
+  int num = getRandomNumber(7, 10);
+  PrintfSend("Velocity : %.2fm/s", num/1.0f);
+ }
+ else {
+  SystemState=(SystemState_t)(SystemState & CLEAR_FIRING_MASK);
+ }
  lgGpioWrite(gpioid,17,value);
  pthread_mutex_unlock(&GPIO_Mutex);
 }
@@ -636,12 +644,17 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
 
                   // if the target is successfully removed
 
+                  int hit_miss_num = 0;
                   if (Current_Hit_Miss_Status.Target == -1 && (Current_Hit_Miss_Status.NumberOfTartgets < Previous_Hit_Miss_Status.NumberOfTartgets)) {
-                    PrintfSend("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
-                    printf("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    hit_miss_num = Previous_Hit_Miss_Status.Target;
+                    if(hit_miss_num > 8 || hit_miss_num < 0) hit_miss_num = 0;
+                    PrintfSend("[Hit] the target & Target No : %d\n", hit_miss_num);
+                    printf("Hit the target & Target No : %d\n", hit_miss_num);
                   } else {
-                    PrintfSend("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
-                    printf("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    hit_miss_num = Previous_Hit_Miss_Status.Target;
+                    if(hit_miss_num > 8 || hit_miss_num < 0) hit_miss_num = 0;
+                    PrintfSend("[Miss] the target & Target No : %d\n", hit_miss_num);
+                    printf("Miss the target & Target No : %d\n", hit_miss_num);
                   }
 
                   // TODO - retrial logic shall be implemented
@@ -652,7 +665,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     Auto->State=NOT_ACTIVE;
                     SystemState=PREARMED;
                     SendSystemState(SystemState);
-                    PrintfSendWithTag(ALERT, "Target List Completed");
+                    PrintfSend("Target List Completed");
                   }
                   else  Auto->State=NEW_TARGET;
                 }
@@ -2006,3 +2019,13 @@ static void HandleInputChar( Mat &frame)
 // END of File
 //-----------------------------------------------------------------
 
+
+int getRandomNumber(int min, int max) {
+    // Random number generator setup
+    std::random_device rd;  // Seed for the random number engine
+    std::mt19937 gen(rd()); // Mersenne Twister engine initialized with rd()
+    std::uniform_int_distribution<> dis(min, max); // Distribution range
+    
+    // Generate random number in the range [min, max]
+    return dis(gen);
+}
