@@ -399,7 +399,6 @@ class LgClientController(QtCore.QThread):
     
     def set_click_event(self, objectName):
         calChecked = self.ui.checkbox_cal.isChecked()
-        print(f"calcheck: {calChecked}")
         if calChecked:
             if objectName == KEY_UP_1:
                 startcode = INC_Y
