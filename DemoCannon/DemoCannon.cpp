@@ -84,7 +84,7 @@ typedef enum
 typedef struct
 {
  int                       NumberOfTartgets;
- int                       FiringOrder[10];
+ int                       FiringOrder[20];
  int                       CurrentIndex;
  bool                      HaveFiringOrder;
  volatile TEngagementState State;
@@ -505,7 +505,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   }
                   else {
                     trackingCount++;
-                    int limitOfTrackingCount = (detector->getStrategy()->getType() == 0) ? 10 : 5;
+                    int limitOfTrackingCount = (detector->getStrategy()->getType() == 0) ? 8 : 4;
                     if(trackingCount > limitOfTrackingCount) {
                       state = SCANNING;
                       trackingCount = 0;
@@ -614,7 +614,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                       {
                           fire(true);
                           SendSystemState(SystemState);
-                          usleep(200 * 1000);
+                          usleep(50 * 1000);
                           fire(false);
                           usleep(1500 * 1000); //hobin
                       }
@@ -1311,7 +1311,7 @@ static void ProcessFiringOrder(char * FiringOrder)
   AutoEngage.NumberOfTartgets=0;
   AutoEngage.Target=0;
 
-  if (len>10)
+  if (len>20)
      {
       printf("Firing order error\n");
       return;
@@ -1694,7 +1694,20 @@ static void* ClientHandlingThread(void* data) {
             DrawCrosshair(ResizedFrame, Point((int)xCorrect, (int)yCorrect), Scalar(0, 0, 255)); //BGR
         }
 
-        if ((isConnected) && (TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame) < 0))  break;
+        if (isConnected)
+        {
+          pthread_mutex_lock(&TCP_Mutex);
+          int retval = TcpSendImageAsJpeg(TcpConnectedPort, ResizedFrame);
+          pthread_mutex_unlock(&TCP_Mutex);
+
+          if (retval <= 0)
+            {
+              printf("Connection Lost when sending image\n");
+              isConnected = false;
+              enterSafe(SAFE);
+              break;
+            }
+        }
 
         usleep(1000);
         Tend = chrono::steady_clock::now();
