@@ -339,7 +339,6 @@ class LgClientController(QtCore.QThread):
             self.model.set_alert(strValue)
         else:
             self.model.add_log_message_server(f"{text}")
-            print(text)
         if text.find(HIT_TEXT) != -1 or text.find(MISS_TEXT) != -1:
             last_char = None
             for char in reversed(text):
