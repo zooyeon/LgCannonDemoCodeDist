@@ -637,10 +637,10 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                   // if the target is successfully removed
 
                   if (Current_Hit_Miss_Status.Target == -1 && (Current_Hit_Miss_Status.NumberOfTartgets < Previous_Hit_Miss_Status.NumberOfTartgets)) {
-                    PrintfSendWithTag(TITLE, "Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSend("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Hit the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   } else {
-                    PrintfSendWithTag(TITLE, "Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
+                    PrintfSend("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                     printf("Miss the target & Target No : %d\n", Previous_Hit_Miss_Status.Target);
                   }
 
@@ -652,7 +652,7 @@ static void ProcessTargetEngagements(TAutoEngage *Auto,int width,int height)
                     Auto->State=NOT_ACTIVE;
                     SystemState=PREARMED;
                     SendSystemState(SystemState);
-                    PrintfSendWithTag(TITLE, "Target List Completed");
+                    PrintfSendWithTag(ALERT, "Target List Completed");
                   }
                   else  Auto->State=NEW_TARGET;
                 }
